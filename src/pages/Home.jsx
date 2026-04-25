@@ -29,7 +29,7 @@ function buildLocalFeedPage(pageNumber) {
 
 function LoadingTiles({ count = 12 }) {
   return (
-    <div className="columns-2 gap-4 lg:columns-3 2xl:columns-5">
+    <div className="columns-1 gap-3 sm:columns-2 sm:gap-4 lg:columns-3 lg:gap-5 xl:columns-4 2xl:columns-5">
       {Array.from({ length: count }, (_, index) => (
         <div key={index} className="mb-4 block break-inside-avoid">
           <div className={`overflow-hidden rounded-xl border border-white/8 bg-white/[0.04] shadow-[0_18px_40px_rgba(0,0,0,0.22)] ${index % 5 === 0 ? "aspect-[4/5]" : index % 3 === 0 ? "aspect-[3/4]" : "aspect-[5/6]"}`}>
@@ -198,7 +198,7 @@ export default function Home() {
 
   return (
     <div className="px-2 py-3 sm:px-3 sm:py-4">
-      <div className="columns-2 gap-4 lg:columns-3 2xl:columns-5">
+      <div className="columns-1 gap-3 sm:columns-2 sm:gap-4 lg:columns-3 lg:gap-5 xl:columns-4 2xl:columns-5">
         {galleries.map((gallery, index) => (
           <GalleryTile key={`${gallery.id}-${index}`} gallery={gallery} />
         ))}
