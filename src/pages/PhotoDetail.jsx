@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Copy, Eye, Heart, Images, Share2, Star } from "lucide-react";
-import PhotoGrid from "../components/PhotoGrid";
+import DirectoryHeader from "../components/DirectoryHeader";
+import FilterChips from "../components/FilterChips";
+import GalleryGrid from "../components/GalleryGrid";
 import { getGalleryById as getLocalGalleryById, getRelatedPhotos } from "../lib/content";
 import { getGalleryPrimaryImage, normalizeGalleryStats } from "../lib/galleryUtils";
-import { getFastImageUrl, getOriginalImageUrl, optimizeImageUrl } from "../lib/imageUtils";
+import { getOriginalImageUrl, optimizeImageUrl } from "../lib/imageUtils";
 import { galleryApi } from "../services/galleryApi";
 
 function formatCount(value) {
@@ -22,7 +24,6 @@ export default function PhotoDetail() {
   const [source, setSource] = useState("api");
   const [activeIndex, setActiveIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const imageHeights = useRef({});
 
   useEffect(() => {
     setActiveIndex(0);
@@ -42,7 +43,6 @@ export default function PhotoDetail() {
         ]);
 
         if (!active) return;
-
         setGallery(galleryData);
         setRelatedPhotos(relatedData.galleries || []);
         setSource("api");
@@ -50,12 +50,10 @@ export default function PhotoDetail() {
       } catch {
         if (!active) return;
         const localGallery = getLocalGalleryById(photoId);
-
         if (!localGallery) {
           setStatus("error");
           return;
         }
-
         setGallery(localGallery);
         setRelatedPhotos(getRelatedPhotos(localGallery, 8));
         setSource("local");
@@ -64,7 +62,6 @@ export default function PhotoDetail() {
     };
 
     loadGallery();
-
     return () => {
       active = false;
     };
@@ -78,20 +75,16 @@ export default function PhotoDetail() {
             url: image.url,
             thumbnailUrl: image.thumbnail_url || image.thumbnailUrl || image.url,
             title: image.alt_text || image.altText || gallery.title,
-            width: image.width,
-            height: image.height,
           }))
         : [],
     [gallery]
   );
+
   const activeImage = images[activeIndex] || getGalleryPrimaryImage(gallery);
   const { views, likes } = normalizeGalleryStats(gallery);
-  const activePreviewUrl = getFastImageUrl(activeImage, 1600, 82);
-  const activeOriginalUrl = getOriginalImageUrl(activeImage);
 
   useEffect(() => {
-    if (!lightboxOpen) return undefined;
-    if (!images.length) return undefined;
+    if (!lightboxOpen || !images.length) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === "Escape") setLightboxOpen(false);
       if (event.key === "ArrowRight") setActiveIndex((current) => (current + 1) % images.length);
@@ -104,17 +97,11 @@ export default function PhotoDetail() {
   if (status === "loading") {
     return (
       <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6">
-        <div className="mb-6">
-          <div className="h-8 w-2/3 animate-pulse rounded bg-white/[0.06]" />
-        </div>
+        <div className="mb-6 h-8 w-2/3 animate-pulse rounded bg-white/[0.06]" />
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
           {Array(8).fill(0).map((_, i) => (
             <div key={i} className="aspect-video animate-pulse rounded-lg bg-white/[0.06]" />
           ))}
-        </div>
-        <div className="mt-8 space-y-4 rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
-          <div className="h-6 w-32 animate-pulse rounded bg-white/[0.06]" />
-          <div className="h-24 animate-pulse rounded bg-white/[0.06]" />
         </div>
       </div>
     );
@@ -132,6 +119,28 @@ export default function PhotoDetail() {
   }
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : `/photo/${gallery.id}`;
+  const metadataLinks = [];
+
+  if (source === "local" && gallery.categoryMeta?.name) {
+    metadataLinks.push({ id: "category", label: "Category", value: gallery.categoryMeta.name, href: `/category/${gallery.categoryMeta.id}` });
+  } else if (gallery.category_name) {
+    metadataLinks.push({ id: "category", label: "Category", value: gallery.category_name });
+  }
+  if (source === "local" && gallery.channelMeta?.name) {
+    metadataLinks.push({ id: "channel", label: "Channel", value: gallery.channelMeta.name, href: `/channels/${gallery.channelMeta.slug}` });
+  }
+  if (source === "local" && gallery.starMeta?.name) {
+    metadataLinks.push({ id: "star", label: "Star", value: gallery.starMeta.name, href: `/stars/${gallery.starMeta.slug}` });
+  }
+  if (gallery.photographer) {
+    metadataLinks.push({ id: "creator", label: "Creator", value: gallery.photographer, href: `/creators/${gallery.photographer.toLowerCase().replace(/[^a-z0-9]+/g, "-")}` });
+  }
+
+  const tagLinks = (gallery.tags || []).map((tag) => {
+    const tagName = typeof tag === "string" ? tag : tag.name;
+    const tagSlug = typeof tag === "string" ? tag.toLowerCase().replace(/[^a-z0-9]+/g, "-") : tag.slug;
+    return { id: tagSlug || tagName, name: tagName, href: `/tags/${tagSlug}` };
+  });
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -147,14 +156,25 @@ export default function PhotoDetail() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-3 py-4 sm:px-4 sm:py-6">
-      {/* Title Section */}
-      <section className="border-b border-white/10 pb-6">
-        <h1 className="text-3xl font-semibold text-white sm:text-4xl">{gallery.title}</h1>
-        <p className="mt-2 text-sm text-zinc-400">{gallery.photographer}</p>
-        {gallery.description && <p className="mt-4 text-sm leading-7 text-zinc-300">{gallery.description}</p>}
-      </section>
+      <DirectoryHeader
+        eyebrow="Gallery"
+        title={gallery.title}
+        count={images.length}
+        description={gallery.description || gallery.photographer}
+        actions={
+          <>
+            <button type="button" onClick={handleShare} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90">
+              <Share2 className="mr-2 inline h-4 w-4" />
+              Share
+            </button>
+            <button type="button" onClick={handleCopy} className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/25">
+              <Copy className="mr-2 inline h-4 w-4" />
+              Copy link
+            </button>
+          </>
+        }
+      />
 
-      {/* Masonry Gallery Grid */}
       <section>
         <div className="columns-2 gap-4 sm:columns-3 lg:columns-4">
           {images.map((image, index) => (
@@ -168,7 +188,7 @@ export default function PhotoDetail() {
               className="group relative mb-4 block w-full overflow-hidden rounded-lg border border-white/10 bg-white/5 transition hover:border-white/30"
             >
               <img
-                src={optimizeImageUrl(image.thumbnailUrl || image.url, 400)}
+                src={optimizeImageUrl(image.thumbnailUrl || image.url, 500)}
                 alt={image.title}
                 loading="lazy"
                 decoding="async"
@@ -181,117 +201,77 @@ export default function PhotoDetail() {
         </div>
       </section>
 
-      {/* Gallery Info Section */}
-      <section className="grid gap-6 rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Stats */}
-        <div className="rounded-[1.2rem] border border-white/8 bg-white/3 px-4 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Views</div>
-          <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
-            <Eye className="h-4 w-4 text-primary" />
-            {formatCount(views)}
-          </div>
-        </div>
-        <div className="rounded-[1.2rem] border border-white/8 bg-white/3 px-4 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Likes</div>
-          <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
-            <Heart className="h-4 w-4 text-primary" />
-            {formatCount(likes)}
-          </div>
-        </div>
-        <div className="rounded-[1.2rem] border border-white/8 bg-white/3 px-4 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Frames</div>
-          <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
-            <Images className="h-4 w-4 text-primary" />
-            {images.length}
-          </div>
-        </div>
-        <div className="rounded-[1.2rem] border border-white/8 bg-white/3 px-4 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Rating</div>
-          <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
-            <Star className="h-4 w-4 text-primary" />
-            100%
-          </div>
-        </div>
-      </section>
-
-      {/* Metadata Info */}
-      <section className="space-y-4 rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
-        {/* Category */}
-        {[source === "api" ? gallery.category_name : gallery.categoryMeta?.name]
-          .filter(Boolean)
-          .map((category) => (
-            <div key={category}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Category</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm font-medium text-zinc-300">
-                  {category}
-                </span>
+      <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">Stats</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[1rem] border border-white/8 bg-white/3 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Views</div>
+              <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
+                <Eye className="h-4 w-4 text-primary" />
+                {formatCount(views)}
               </div>
             </div>
-          ))}
-
-        {/* Tags */}
-        {(gallery.tags || []).length > 0 && (
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Tags</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(gallery.tags || []).map((tag) => {
-                const tagName = typeof tag === "string" ? tag : tag.name;
-                const tagSlug = typeof tag === "string" ? tag.toLowerCase().replace(/[^a-z0-9]+/g, "-") : tag.slug;
-
-                return (
-                  <Link
-                    key={tagSlug || tagName}
-                    to={`/tags/${tagSlug}`}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-200 transition hover:border-white/20 hover:bg-white/10"
-                  >
-                    {tagName}
-                  </Link>
-                );
-              })}
+            <div className="rounded-[1rem] border border-white/8 bg-white/3 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Likes</div>
+              <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
+                <Heart className="h-4 w-4 text-primary" />
+                {formatCount(likes)}
+              </div>
+            </div>
+            <div className="rounded-[1rem] border border-white/8 bg-white/3 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Frames</div>
+              <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
+                <Images className="h-4 w-4 text-primary" />
+                {images.length}
+              </div>
+            </div>
+            <div className="rounded-[1rem] border border-white/8 bg-white/3 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Rating</div>
+              <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
+                <Star className="h-4 w-4 text-primary" />
+                100%
+              </div>
             </div>
           </div>
-        )}
-      </section>
-
-      {/* Action Buttons */}
-      <section className="flex flex-wrap gap-3 sm:gap-4">
-        <button
-          type="button"
-          onClick={handleShare}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
-        >
-          <Share2 className="h-4 w-4" />
-          Share
-        </button>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/5"
-        >
-          <Copy className="h-4 w-4" />
-          Copy link
-        </button>
-        <button
-          type="button"
-          disabled
-          className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-6 py-3 text-sm font-semibold text-zinc-500"
-        >
-          <Star className="h-4 w-4" />
-          Favorite (account-only)
-        </button>
-      </section>
-
-      {/* Related Galleries */}
-      <section className="border-t border-white/10 pt-8">
-        <div className="mb-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Related galleries</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">Keep browsing from the same visual lane</h2>
         </div>
-        <PhotoGrid photos={relatedPhotos} emptyTitle="No related galleries" emptyCopy="Nothing similar yet." />
+
+        <div className="space-y-5 rounded-[1.6rem] border border-white/10 bg-white/[0.04] p-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">Directory fields</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {metadataLinks.map((item) => (
+                <div key={item.id} className="rounded-[1rem] border border-white/8 bg-white/3 px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{item.label}</div>
+                  {item.href ? (
+                    <Link to={item.href} className="mt-2 block text-sm font-semibold text-white transition hover:text-primary">
+                      {item.value}
+                    </Link>
+                  ) : (
+                    <div className="mt-2 text-sm font-semibold text-white">{item.value}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">Tags</p>
+            <div className="mt-3">
+              <FilterChips items={tagLinks} emptyCopy="No tags attached to this gallery." />
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* Lightbox */}
+      <section className="space-y-4 border-t border-white/10 pt-6">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Related galleries</p>
+          <h2 className="mt-1 text-2xl font-semibold text-white">Keep browsing nearby lanes</h2>
+        </div>
+        <GalleryGrid photos={relatedPhotos} emptyTitle="No related galleries" emptyCopy="Nothing similar yet." />
+      </section>
+
       {lightboxOpen ? (
         <div className="fixed inset-0 z-[70] bg-black/95 px-3 py-4 sm:px-6 sm:py-6">
           <div className="mx-auto flex h-full max-w-7xl flex-col gap-4">
@@ -320,7 +300,7 @@ export default function PhotoDetail() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <img
-                  src={activeOriginalUrl}
+                  src={getOriginalImageUrl(activeImage)}
                   alt={activeImage?.title || gallery.title}
                   loading="eager"
                   decoding="async"

@@ -6,10 +6,13 @@ import Categories from "./pages/Categories";
 import CategoryPage from "./pages/CategoryPage";
 import ChannelDetail from "./pages/ChannelDetail";
 import Channels from "./pages/Channels";
+import CreatorDetail from "./pages/CreatorDetail";
 import Creators from "./pages/Creators";
 import Home from "./pages/Home";
 import PhotoDetail from "./pages/PhotoDetail";
 import SearchResults from "./pages/SearchResults";
+import StarDetail from "./pages/StarDetail";
+import Stars from "./pages/Stars";
 import TagPage from "./pages/TagPage";
 import Trending from "./pages/Trending";
 import Upload from "./pages/Upload";
@@ -27,6 +30,9 @@ export default function App() {
             <Route path="/channels" element={<Channels />} />
             <Route path="/channels/:slug" element={<ChannelDetail />} />
             <Route path="/creators" element={<Creators />} />
+            <Route path="/creators/:slug" element={<CreatorDetail />} />
+            <Route path="/stars" element={<Stars />} />
+            <Route path="/stars/:slug" element={<StarDetail />} />
             <Route path="/trending" element={<Trending />} />
             <Route path="/search" element={<SearchResults />} />
             <Route path="/tags/:tagSlug" element={<TagPage />} />

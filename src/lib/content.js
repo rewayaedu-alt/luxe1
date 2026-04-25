@@ -556,6 +556,10 @@ export function getPhotosByStar(starSlug) {
   return getPhotos().filter((photo) => photo.star === starSlug);
 }
 
+export function getPhotosByCreator(creatorSlug) {
+  return getPhotos().filter((photo) => slugify(photo.photographer) === creatorSlug);
+}
+
 export function getFeaturedPhotos(limit = 8) {
   return getPhotos().filter((photo) => photo.featured).slice(0, limit);
 }
@@ -691,6 +695,23 @@ export function getFeaturedAlbums(limit = 5) {
     .slice(0, limit);
 }
 
+export const GALLERY_SORT_OPTIONS = [
+  { value: "popular", label: "Most Popular" },
+  { value: "recent", label: "Most Recent" },
+];
+
+export const ENTITY_SORT_OPTIONS = [
+  { value: "popular", label: "Most Popular" },
+  { value: "recent", label: "Most Recent" },
+  { value: "galleries", label: "Most Galleries" },
+  { value: "alphabetical", label: "Alphabetical" },
+];
+
+export const CATEGORY_SORT_OPTIONS = [
+  { value: "popular", label: "Popular" },
+  { value: "alphabetical", label: "Alphabetical" },
+];
+
 export function getPrimaryNicheLabel(...values) {
   for (const value of values) {
     if (Array.isArray(value) && value.length) {
@@ -808,6 +829,136 @@ export function getCreatorSummaries() {
       tags: [...creator.tags].slice(0, 4),
     }))
     .sort((a, b) => b.count - a.count || b.views + b.likes - (a.views + a.likes));
+}
+
+export function getCreatorBySlug(slug) {
+  return getCreatorSummaries().find((creator) => creator.slug === slug) ?? null;
+}
+
+function getLatestPublishedAt(photos) {
+  return sortByDateDesc(photos)[0]?.publishedAt || "";
+}
+
+export function getSortedGalleryFeed(mode = "popular", items = getPhotos()) {
+  if (mode === "recent") {
+    return sortByDateDesc(items);
+  }
+
+  return [...items].sort((a, b) => scoreGallery(b) - scoreGallery(a));
+}
+
+export function getSortedCategorySummaries(mode = "popular") {
+  const items = getCategorySummaries();
+  if (mode === "alphabetical") {
+    return [...items].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return [...items].sort((a, b) => Number(b.views || 0) + Number(b.count || 0) * 40 - (Number(a.views || 0) + Number(a.count || 0) * 40));
+}
+
+export function getSortedChannelSummaries(mode = "popular") {
+  const items = getChannelSummaries().map((channel) => ({
+    ...channel,
+    latestPublishedAt: getLatestPublishedAt(getPhotosByChannel(channel.slug)),
+  }));
+
+  if (mode === "recent") {
+    return [...items].sort((a, b) => new Date(b.latestPublishedAt || 0).getTime() - new Date(a.latestPublishedAt || 0).getTime());
+  }
+
+  if (mode === "galleries") {
+    return [...items].sort((a, b) => Number(b.count || 0) - Number(a.count || 0) || a.name.localeCompare(b.name));
+  }
+
+  if (mode === "alphabetical") {
+    return [...items].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return [...items].sort((a, b) => Number(b.views || 0) + Number(b.count || 0) * 40 - (Number(a.views || 0) + Number(a.count || 0) * 40));
+}
+
+export function getSortedStarSummaries(mode = "popular") {
+  const items = getStarSummaries().map((star) => ({
+    ...star,
+    latestPublishedAt: getLatestPublishedAt(getPhotosByStar(star.slug)),
+  }));
+
+  if (mode === "recent") {
+    return [...items].sort((a, b) => new Date(b.latestPublishedAt || 0).getTime() - new Date(a.latestPublishedAt || 0).getTime());
+  }
+
+  if (mode === "galleries") {
+    return [...items].sort((a, b) => Number(b.count || 0) - Number(a.count || 0) || a.name.localeCompare(b.name));
+  }
+
+  if (mode === "alphabetical") {
+    return [...items].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return [...items].sort((a, b) => Number(b.views || 0) + Number(b.count || 0) * 40 - (Number(a.views || 0) + Number(a.count || 0) * 40));
+}
+
+export function getSortedCreatorSummaries(mode = "popular") {
+  const items = getCreatorSummaries().map((creator) => ({
+    ...creator,
+    latestPublishedAt: getLatestPublishedAt(getPhotosByCreator(creator.slug)),
+  }));
+
+  if (mode === "recent") {
+    return [...items].sort((a, b) => new Date(b.latestPublishedAt || 0).getTime() - new Date(a.latestPublishedAt || 0).getTime());
+  }
+
+  if (mode === "galleries") {
+    return [...items].sort((a, b) => Number(b.count || 0) - Number(a.count || 0) || a.name.localeCompare(b.name));
+  }
+
+  if (mode === "alphabetical") {
+    return [...items].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return [...items].sort((a, b) => Number(b.views || 0) + Number(b.likes || 0) - (Number(a.views || 0) + Number(a.likes || 0)) || Number(b.count || 0) - Number(a.count || 0));
+}
+
+export function getRelatedTagsForPhotos(photos, limit = 10, exclude = []) {
+  const excludeSet = new Set(exclude.map((tag) => slugify(tag)));
+  const tagMap = new Map();
+
+  for (const photo of photos) {
+    for (const tag of photo.tags || []) {
+      const slug = slugify(tag);
+      if (!slug || excludeSet.has(slug)) continue;
+      const current = tagMap.get(slug) ?? {
+        slug,
+        name: titleize(slug),
+        galleryCount: 0,
+      };
+      current.galleryCount += 1;
+      tagMap.set(slug, current);
+    }
+  }
+
+  return [...tagMap.values()]
+    .sort((a, b) => b.galleryCount - a.galleryCount || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
+export function getRelatedCategoryTags(categoryId, limit = 10) {
+  return getRelatedTagsForPhotos(getPhotosByCategory(categoryId), limit, [categoryId]);
+}
+
+export function getRelatedChannelTags(channelSlug, limit = 10) {
+  const channel = getChannelBySlug(channelSlug);
+  return getRelatedTagsForPhotos(getPhotosByChannel(channelSlug), limit, channel?.tags || []);
+}
+
+export function getRelatedStarTags(starSlug, limit = 10) {
+  const star = getStarBySlug(starSlug);
+  return getRelatedTagsForPhotos(getPhotosByStar(starSlug), limit, star?.tags || []);
+}
+
+export function getRelatedCreatorTags(creatorSlug, limit = 10) {
+  const creator = getCreatorBySlug(creatorSlug);
+  return getRelatedTagsForPhotos(getPhotosByCreator(creatorSlug), limit, creator?.tags || []);
 }
 
 export function getGalleryById(photoId) {
@@ -941,7 +1092,7 @@ export function getMixedDiscoveryFeed() {
 export function searchCatalog(query) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
-    return { galleries: [], tags: [], creators: [], channels: [] };
+    return { galleries: [], tags: [], creators: [], channels: [], stars: [] };
   }
 
   const includes = (value) => value.toLowerCase().includes(normalized);
@@ -957,8 +1108,11 @@ export function searchCatalog(query) {
   const channels = getChannelSummaries()
     .filter((channel) => includes(channel.name) || includes(channel.description) || channel.tags.some((tag) => includes(tag)))
     .slice(0, 18);
+  const stars = getStarSummaries()
+    .filter((star) => includes(star.name) || includes(star.bio) || star.tags.some((tag) => includes(tag)))
+    .slice(0, 18);
 
-  return { galleries, tags, creators, channels };
+  return { galleries, tags, creators, channels, stars };
 }
 
 export function createCategory(input) {

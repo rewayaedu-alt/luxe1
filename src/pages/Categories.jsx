@@ -1,20 +1,23 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Hash } from "lucide-react";
+import DirectoryHeader from "../components/DirectoryHeader";
 import DiscoveryGrid from "../components/DiscoveryGrid";
-import { getCategoryRepresentativeImage, getCategorySummaries, getPrimaryNicheLabel, getTags } from "../lib/content";
+import SortTabs from "../components/SortTabs";
+import { CATEGORY_SORT_OPTIONS, getCategoryRepresentativeImage, getPrimaryNicheLabel, getSortedCategorySummaries, getTags } from "../lib/content";
 
 export default function Categories() {
-  const categorySummaries = getCategorySummaries();
-  const popularCategories = categorySummaries.slice(0, 4);
-  const allTags = getTags();
-  const groupedTags = allTags.reduce((accumulator, tag) => {
+  const [searchParams] = useSearchParams();
+  const sort = searchParams.get("sort") || "popular";
+  const categories = getSortedCategorySummaries(sort);
+  const tags = getTags();
+  const groupedTags = tags.reduce((accumulator, tag) => {
     const letter = tag.name.charAt(0).toUpperCase();
     if (!accumulator[letter]) accumulator[letter] = [];
     accumulator[letter].push(tag);
     return accumulator;
   }, {});
   const letters = Object.keys(groupedTags).sort();
-  const discoveryItems = categorySummaries.map((category) => ({
+  const items = categories.map((category) => ({
     id: `category-${category.id}`,
     type: "category",
     href: `/category/${category.id}`,
@@ -23,24 +26,32 @@ export default function Categories() {
     image: getCategoryRepresentativeImage(category),
     niche: getPrimaryNicheLabel(category.preview?.tags, category.name),
     count: category.count,
-    meta: `${category.views} views`,
   }));
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-3 py-4 sm:px-4 sm:py-6">
-      <section className="rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(22,25,32,0.95),rgba(10,11,14,1))] p-6 sm:p-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Categories & Tags</p>
-        <h1 className="mt-3 text-4xl font-semibold text-white sm:text-5xl">Category discovery with one strong card for each lane</h1>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
-          Browse broad lanes first, then drill into the tag cloud when you want the narrower niche cuts.
-        </p>
+      <DirectoryHeader
+        eyebrow="Categories"
+        title="Browse every category"
+        count={categories.length}
+        description="Start broad with category lanes, then move into the tag index when you want tighter cuts."
+      >
+        <SortTabs options={CATEGORY_SORT_OPTIONS} current={sort} />
+      </DirectoryHeader>
+
+      <section className="space-y-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Category index</p>
+          <h2 className="mt-1 text-2xl font-semibold text-white">All category lanes</h2>
+        </div>
+        <DiscoveryGrid items={items} />
       </section>
 
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-3">
+      <section id="tags" className="space-y-5 border-t border-white/10 pt-6">
+        <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Popular categories</p>
-            <h2 className="mt-1 text-2xl font-semibold text-white">Highlighted discovery cards</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Tag archive</p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Tags A-Z</h2>
           </div>
           <div className="hidden gap-2 md:flex">
             {letters.map((letter) => (
@@ -51,28 +62,12 @@ export default function Categories() {
           </div>
         </div>
 
-        <DiscoveryGrid items={discoveryItems.slice(0, popularCategories.length)} />
-      </section>
-
-      <section>
-        <div className="mb-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">All categories</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">Full category grid</h2>
-        </div>
-        <DiscoveryGrid items={[...discoveryItems].sort((a, b) => a.title.localeCompare(b.title))} />
-      </section>
-
-      <section>
-        <div className="mb-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Tags A-Z</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">Every tag in one scanable index</h2>
-        </div>
-        <div className="space-y-5">
+        <div className="space-y-4">
           {letters.map((letter) => (
-            <div key={letter} id={`letter-${letter}`} className="rounded-[1.6rem] border border-white/10 bg-card/70 p-5">
+            <div key={letter} id={`letter-${letter}`} className="rounded-[1.5rem] border border-white/10 bg-card/70 p-5">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-black">{letter}</div>
-                <p className="text-sm text-zinc-400">{groupedTags[letter].length} tags</p>
+                <p className="text-sm text-zinc-500">{groupedTags[letter].length} tags</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {groupedTags[letter].map((tag) => (

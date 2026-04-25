@@ -1,4 +1,4 @@
-import DiscoveryCard from "./DiscoveryCard";
+import EntityIndexCard from "./EntityIndexCard";
 
 export default function DiscoveryGrid({
   items = [],
@@ -17,11 +17,10 @@ export default function DiscoveryGrid({
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {items.map((item, index) => (
-        <DiscoveryCard
+        <EntityIndexCard
           key={item.id || `${item.type}-${index}`}
           item={item}
           priority={index < 4}
-          aspect={index % 6 === 0 ? "aspect-[5/7]" : index % 4 === 0 ? "aspect-[1/1]" : "aspect-[4/5]"}
         />
       ))}
     </div>

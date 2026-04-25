@@ -12,7 +12,8 @@ export default function PageNotFound() {
           We could not find <span className="font-medium text-foreground">{location.pathname}</span>. Jump back into the catalog or explore one of the featured sections below.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link to="/" className="rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background">Home</Link>
+          <Link to="/" className="rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background">Popular</Link>
+          <Link to="/stars" className="rounded-full border border-border px-5 py-3 text-sm font-semibold">Stars</Link>
           <Link to="/channels" className="rounded-full border border-border px-5 py-3 text-sm font-semibold">Channels</Link>
           <Link to="/upload" className="rounded-full border border-border px-5 py-3 text-sm font-semibold">Demo upload</Link>
         </div>

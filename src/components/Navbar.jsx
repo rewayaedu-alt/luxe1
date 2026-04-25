@@ -1,16 +1,18 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Grid2x2, Menu, Search, Sparkles, TrendingUp, Tv2, Upload, UserRound, X } from "lucide-react";
+import { Menu, Search, Shield, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCategories } from "../lib/content";
 
 const navItems = [
-  { to: "/", label: "Home", icon: Grid2x2, match: (pathname) => pathname === "/" },
-  { to: "/trending", label: "Trending", icon: TrendingUp, match: (pathname) => pathname.startsWith("/trending") },
-  { to: "/categories", label: "Categories", icon: Grid2x2, match: (pathname) => pathname === "/categories" || pathname.startsWith("/category/") || pathname.startsWith("/tags/") },
-  { to: "/creators", label: "Creators", icon: UserRound, match: (pathname) => pathname.startsWith("/creators") },
-  { to: "/channels", label: "Channels", icon: Tv2, match: (pathname) => pathname.startsWith("/channels") },
+  { to: "/", label: "Popular", active: (location) => location.pathname === "/" && (new URLSearchParams(location.search).get("sort") || "popular") === "popular" },
+  { to: "/?sort=recent", label: "Recent", active: (location) => location.pathname === "/" && new URLSearchParams(location.search).get("sort") === "recent" },
+  { to: "/categories", label: "Categories", active: (location) => location.pathname === "/categories" || location.pathname.startsWith("/category/") },
+  { to: "/categories#tags", label: "Tags", active: (location) => location.pathname.startsWith("/tags/") },
+  { to: "/stars", label: "Stars", active: (location) => location.pathname === "/stars" || location.pathname.startsWith("/stars/") },
+  { to: "/creators", label: "Creators", active: (location) => location.pathname === "/creators" || location.pathname.startsWith("/creators/") },
+  { to: "/channels", label: "Channels", active: (location) => location.pathname === "/channels" || location.pathname.startsWith("/channels/") },
 ];
 
 export default function Navbar() {
@@ -28,26 +30,28 @@ export default function Navbar() {
     setMobileOpen(false);
   };
 
+  const mobileLinks = [...navItems, { to: "/trending", label: "Trending", active: (itemLocation) => itemLocation.pathname.startsWith("/trending") }];
+
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#090b10]/92 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#090b10]/95 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-3 sm:px-4">
         <Link to="/" className="flex shrink-0 items-center gap-3 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-white transition hover:border-white/20">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black">
             <Sparkles className="h-4 w-4" />
           </span>
           <span>
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400">Discovery</span>
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Directory</span>
             <span className="block text-sm font-semibold">Luxious</span>
           </span>
         </Link>
 
-        <form onSubmit={handleSearch} className="hidden flex-1 md:block">
+        <form onSubmit={handleSearch} className="hidden flex-1 lg:block">
           <div className="relative max-w-2xl">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search galleries, tags, creators, channels"
+              placeholder="Search galleries, tags, stars, creators, channels"
               className="h-11 rounded-full border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm"
             />
           </div>
@@ -55,7 +59,7 @@ export default function Navbar() {
 
         <nav className="hidden items-center gap-1 xl:flex">
           {navItems.map((item) => {
-            const active = item.match(location.pathname);
+            const active = item.active(location);
             return (
               <Link
                 key={item.to}
@@ -70,11 +74,14 @@ export default function Navbar() {
           })}
         </nav>
 
-        <div className="ml-auto hidden md:block">
-          <Link to="/upload">
-            <Button className="h-10 rounded-full px-5 shadow-[0_12px_30px_rgba(238,71,91,0.25)]">
-              <Upload className="mr-2 h-4 w-4" />
-              Upload
+        <div className="ml-auto hidden items-center gap-2 md:flex">
+          <Link to="/upload" className="rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:border-white/20 hover:text-white">
+            Admin
+          </Link>
+          <Link to="/trending">
+            <Button className="h-10 rounded-full px-5">
+              <Shield className="mr-2 h-4 w-4" />
+              Trending
             </Button>
           </Link>
         </div>
@@ -98,13 +105,13 @@ export default function Navbar() {
             </div>
           </form>
           <div className="grid grid-cols-2 gap-2">
-            {navItems.map((item) => (
+            {mobileLinks.map((item) => (
               <Link key={item.to} to={item.to} onClick={() => setMobileOpen(false)} className="rounded-2xl bg-white/[0.04] px-3 py-3 text-sm text-white">
                 {item.label}
               </Link>
             ))}
             <Link to="/upload" onClick={() => setMobileOpen(false)} className="rounded-2xl bg-white px-3 py-3 text-sm font-medium text-black">
-              Upload
+              Admin
             </Link>
           </div>
         </div>
