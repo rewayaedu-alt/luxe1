@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Hash } from "lucide-react";
-import MediaMasonry from "../components/MediaMasonry";
-import { getCategorySummaries, getTags } from "../lib/content";
+import DiscoveryGrid from "../components/DiscoveryGrid";
+import { getCategoryRepresentativeImage, getCategorySummaries, getPrimaryNicheLabel, getTags } from "../lib/content";
 
 export default function Categories() {
   const categorySummaries = getCategorySummaries();
@@ -14,14 +14,25 @@ export default function Categories() {
     return accumulator;
   }, {});
   const letters = Object.keys(groupedTags).sort();
+  const discoveryItems = categorySummaries.map((category) => ({
+    id: `category-${category.id}`,
+    type: "category",
+    href: `/category/${category.id}`,
+    title: category.name,
+    subtitle: category.description,
+    image: getCategoryRepresentativeImage(category),
+    niche: getPrimaryNicheLabel(category.preview?.tags, category.name),
+    count: category.count,
+    meta: `${category.views} views`,
+  }));
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-3 py-4 sm:px-4 sm:py-6">
       <section className="rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(22,25,32,0.95),rgba(10,11,14,1))] p-6 sm:p-8">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Categories & Tags</p>
-        <h1 className="mt-3 text-4xl font-semibold text-white sm:text-5xl">A-Z category index with a separate tag cloud</h1>
+        <h1 className="mt-3 text-4xl font-semibold text-white sm:text-5xl">Category discovery with one strong card for each lane</h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 sm:text-base">
-          Browse broad discovery lanes first, then drill into tags when you want finer-grained search behavior.
+          Browse broad lanes first, then drill into the tag cloud when you want the narrower niche cuts.
         </p>
       </section>
 
@@ -29,7 +40,7 @@ export default function Categories() {
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Popular categories</p>
-            <h2 className="mt-1 text-2xl font-semibold text-white">Highlighted at the top</h2>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Highlighted discovery cards</h2>
           </div>
           <div className="hidden gap-2 md:flex">
             {letters.map((letter) => (
@@ -40,33 +51,15 @@ export default function Categories() {
           </div>
         </div>
 
-        <MediaMasonry
-          items={popularCategories}
-          columnsClass="columns-2 gap-4 xl:columns-4"
-          getHref={(category) => `/category/${category.id}`}
-          getImageSrc={(category) => category.coverImage}
-          getAlt={(category) => category.name}
-        />
+        <DiscoveryGrid items={discoveryItems.slice(0, popularCategories.length)} />
       </section>
 
       <section>
         <div className="mb-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">All categories</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">Alphabetical category grid</h2>
+          <h2 className="mt-1 text-2xl font-semibold text-white">Full category grid</h2>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[...categorySummaries].sort((a, b) => a.name.localeCompare(b.name)).map((category) => (
-            <Link key={category.id} to={`/category/${category.id}`} className="rounded-[1.5rem] border border-white/10 bg-card/85 p-5 transition hover:border-white/20">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-semibold text-white">{category.name}</h3>
-                  <p className="mt-2 text-sm leading-6 text-zinc-400">{category.description}</p>
-                </div>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase text-black">{category.count}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <DiscoveryGrid items={[...discoveryItems].sort((a, b) => a.title.localeCompare(b.title))} />
       </section>
 
       <section>

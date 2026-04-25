@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { optimizeImageUrl, getOptimizedThumbnailUrl } from "../lib/imageUtils";
+import { getOptimizedThumbnailUrl } from "../lib/imageUtils";
 
 const aspectCycle = [
   "aspect-[4/5]",

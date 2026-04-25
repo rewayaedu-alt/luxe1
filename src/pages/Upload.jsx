@@ -33,10 +33,10 @@ const defaultForm = {
 };
 
 const defaultEntityForms = {
-  category: { name: "", description: "", coverImage: "" },
-  channel: { name: "", description: "", logoUrl: "", website: "", tags: "" },
-  album: { name: "", description: "", coverImage: "", channel: "", star: "" },
-  star: { name: "", bio: "", avatarUrl: "", tags: "" },
+  category: { name: "", description: "", coverImage: "", thumbnailUrl: "" },
+  channel: { name: "", description: "", logoUrl: "", website: "", tags: "", thumbnailUrl: "" },
+  album: { name: "", description: "", coverImage: "", channel: "", star: "", thumbnailUrl: "" },
+  star: { name: "", bio: "", avatarUrl: "", tags: "", thumbnailUrl: "" },
 };
 
 function toTagArray(value) {
@@ -65,7 +65,6 @@ export default function Upload() {
   const [bulkUrls, setBulkUrls] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
-  const [customThumbnailFile, setCustomThumbnailFile] = useState(null);
   const [customThumbnailUrl, setCustomThumbnailUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [entityForms, setEntityForms] = useState(defaultEntityForms);
@@ -84,8 +83,16 @@ export default function Upload() {
     star: form.star || stars[0]?.slug || "",
   };
 
-  const activePreview = selectedFile ? previewUrl : hydratedForm.url || "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80";
+  const activePreview =
+    selectedFile ? previewUrl : hydratedForm.url || "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80";
+  const discoveryPreview = customThumbnailUrl || buildThumbnail(activePreview);
   const parsedBulkUrls = bulkUrls.split("\n").map((line) => line.trim()).filter(Boolean);
+  const entityPreviewImages = {
+    category: entityForms.category.thumbnailUrl || entityForms.category.coverImage,
+    channel: entityForms.channel.thumbnailUrl || entityForms.channel.logoUrl,
+    album: entityForms.album.thumbnailUrl || entityForms.album.coverImage,
+    star: entityForms.star.thumbnailUrl || entityForms.star.avatarUrl,
+  };
 
   const refreshCatalog = () => setCatalogVersion((value) => value + 1);
 
@@ -103,54 +110,7 @@ export default function Upload() {
     setForm(defaultForm);
     setSelectedFile(null);
     setPreviewUrl("");
-    setCustomThumbnailFile(null);
     setCustomThumbnailUrl("");
-  };
-
-  const handleCreateEntity = (entity) => {
-    if (entity === "category" && entityForms.category.name.trim()) {
-      const created = createCategory({
-        name: entityForms.category.name.trim(),
-        description: entityForms.category.description.trim(),
-        coverImage: entityForms.category.coverImage.trim(),
-      });
-      setForm((current) => ({ ...current, category: created.id }));
-    }
-
-    if (entity === "channel" && entityForms.channel.name.trim()) {
-      const created = createChannel({
-        name: entityForms.channel.name.trim(),
-        description: entityForms.channel.description.trim(),
-        logoUrl: entityForms.channel.logoUrl.trim(),
-        website: entityForms.channel.website.trim(),
-        tags: toTagArray(entityForms.channel.tags),
-      });
-      setForm((current) => ({ ...current, channel: created.slug }));
-    }
-
-    if (entity === "star" && entityForms.star.name.trim()) {
-      const created = createStar({
-        name: entityForms.star.name.trim(),
-        bio: entityForms.star.bio.trim(),
-        avatarUrl: entityForms.star.avatarUrl.trim(),
-        tags: toTagArray(entityForms.star.tags),
-      });
-      setForm((current) => ({ ...current, star: created.slug }));
-    }
-
-    if (entity === "album" && entityForms.album.name.trim()) {
-      const created = createAlbum({
-        name: entityForms.album.name.trim(),
-        description: entityForms.album.description.trim(),
-        coverImage: entityForms.album.coverImage.trim(),
-        channel: entityForms.album.channel || hydratedForm.channel,
-        star: entityForms.album.star || hydratedForm.star,
-      });
-      setForm((current) => ({ ...current, album: created.slug }));
-    }
-
-    setEntityForms(defaultEntityForms);
-    refreshCatalog();
   };
 
   const handleFileChange = async (event) => {
@@ -163,8 +123,63 @@ export default function Upload() {
   const handleCustomThumbnailChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setCustomThumbnailFile(file);
     setCustomThumbnailUrl(await fileToDataUrl(file));
+  };
+
+  const handleEntityThumbnailChange = async (entity, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    updateEntityForm(entity, "thumbnailUrl", await fileToDataUrl(file));
+  };
+
+  const handleCreateEntity = (entity) => {
+    if (entity === "category" && entityForms.category.name.trim()) {
+      const created = createCategory({
+        name: entityForms.category.name.trim(),
+        description: entityForms.category.description.trim(),
+        coverImage: entityForms.category.coverImage.trim(),
+        thumbnailUrl: entityForms.category.thumbnailUrl.trim(),
+      });
+      setForm((current) => ({ ...current, category: created.id }));
+    }
+
+    if (entity === "channel" && entityForms.channel.name.trim()) {
+      const created = createChannel({
+        name: entityForms.channel.name.trim(),
+        description: entityForms.channel.description.trim(),
+        logoUrl: entityForms.channel.logoUrl.trim(),
+        thumbnailUrl: entityForms.channel.thumbnailUrl.trim(),
+        website: entityForms.channel.website.trim(),
+        tags: toTagArray(entityForms.channel.tags),
+      });
+      setForm((current) => ({ ...current, channel: created.slug }));
+    }
+
+    if (entity === "star" && entityForms.star.name.trim()) {
+      const created = createStar({
+        name: entityForms.star.name.trim(),
+        bio: entityForms.star.bio.trim(),
+        avatarUrl: entityForms.star.avatarUrl.trim(),
+        thumbnailUrl: entityForms.star.thumbnailUrl.trim(),
+        tags: toTagArray(entityForms.star.tags),
+      });
+      setForm((current) => ({ ...current, star: created.slug }));
+    }
+
+    if (entity === "album" && entityForms.album.name.trim()) {
+      const created = createAlbum({
+        name: entityForms.album.name.trim(),
+        description: entityForms.album.description.trim(),
+        coverImage: entityForms.album.coverImage.trim(),
+        thumbnailUrl: entityForms.album.thumbnailUrl.trim(),
+        channel: entityForms.album.channel || hydratedForm.channel,
+        star: entityForms.album.star || hydratedForm.star,
+      });
+      setForm((current) => ({ ...current, album: created.slug }));
+    }
+
+    setEntityForms(defaultEntityForms);
+    refreshCatalog();
   };
 
   const handleSingleCreate = async () => {
@@ -223,6 +238,8 @@ export default function Upload() {
         <>
           <Input value={entityForms.category.name} onChange={(event) => updateEntityForm("category", "name", event.target.value)} placeholder="Velvet pool nights" />
           <Input value={entityForms.category.coverImage} onChange={(event) => updateEntityForm("category", "coverImage", event.target.value)} placeholder="Cover image URL" />
+          <Input value={entityForms.category.thumbnailUrl} onChange={(event) => updateEntityForm("category", "thumbnailUrl", event.target.value)} placeholder="Category thumbnail URL" />
+          <Input type="file" accept="image/*" onChange={(event) => handleEntityThumbnailChange("category", event)} />
           <Textarea rows={2} value={entityForms.category.description} onChange={(event) => updateEntityForm("category", "description", event.target.value)} placeholder="Short mood note" />
         </>
       ),
@@ -235,6 +252,8 @@ export default function Upload() {
         <>
           <Input value={entityForms.channel.name} onChange={(event) => updateEntityForm("channel", "name", event.target.value)} placeholder="Midnight members" />
           <Input value={entityForms.channel.logoUrl} onChange={(event) => updateEntityForm("channel", "logoUrl", event.target.value)} placeholder="Logo image URL" />
+          <Input value={entityForms.channel.thumbnailUrl} onChange={(event) => updateEntityForm("channel", "thumbnailUrl", event.target.value)} placeholder="Channel thumbnail URL" />
+          <Input type="file" accept="image/*" onChange={(event) => handleEntityThumbnailChange("channel", event)} />
           <Input value={entityForms.channel.website} onChange={(event) => updateEntityForm("channel", "website", event.target.value)} placeholder="Optional website" />
           <Input value={entityForms.channel.tags} onChange={(event) => updateEntityForm("channel", "tags", event.target.value)} placeholder="night, luxury, private" />
           <Textarea rows={2} value={entityForms.channel.description} onChange={(event) => updateEntityForm("channel", "description", event.target.value)} placeholder="Short channel note" />
@@ -249,6 +268,8 @@ export default function Upload() {
         <>
           <Input value={entityForms.album.name} onChange={(event) => updateEntityForm("album", "name", event.target.value)} placeholder="Suite drop 01" />
           <Input value={entityForms.album.coverImage} onChange={(event) => updateEntityForm("album", "coverImage", event.target.value)} placeholder="Cover image URL" />
+          <Input value={entityForms.album.thumbnailUrl} onChange={(event) => updateEntityForm("album", "thumbnailUrl", event.target.value)} placeholder="Album thumbnail URL" />
+          <Input type="file" accept="image/*" onChange={(event) => handleEntityThumbnailChange("album", event)} />
           <Select value={entityForms.album.channel || hydratedForm.channel} onValueChange={(value) => updateEntityForm("album", "channel", value)}>
             <SelectTrigger><SelectValue placeholder="Album channel" /></SelectTrigger>
             <SelectContent>{channels.map((channel) => <SelectItem key={channel.slug} value={channel.slug}>{channel.name}</SelectItem>)}</SelectContent>
@@ -269,6 +290,8 @@ export default function Upload() {
         <>
           <Input value={entityForms.star.name} onChange={(event) => updateEntityForm("star", "name", event.target.value)} placeholder="Aria Noir" />
           <Input value={entityForms.star.avatarUrl} onChange={(event) => updateEntityForm("star", "avatarUrl", event.target.value)} placeholder="Avatar image URL" />
+          <Input value={entityForms.star.thumbnailUrl} onChange={(event) => updateEntityForm("star", "thumbnailUrl", event.target.value)} placeholder="Star thumbnail URL" />
+          <Input type="file" accept="image/*" onChange={(event) => handleEntityThumbnailChange("star", event)} />
           <Input value={entityForms.star.tags} onChange={(event) => updateEntityForm("star", "tags", event.target.value)} placeholder="glam, late night, suite" />
           <Textarea rows={2} value={entityForms.star.bio} onChange={(event) => updateEntityForm("star", "bio", event.target.value)} placeholder="Short star bio" />
         </>
@@ -282,15 +305,15 @@ export default function Upload() {
         <div className="rounded-[2rem] border border-border/70 bg-card/85 p-8 shadow-[0_22px_60px_rgba(18,20,34,0.08)]">
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Local creator tools</span>
-            <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">18+ audience</span>
+            <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Thumbnail-ready</span>
           </div>
-          <h1 className="mt-5 font-display text-5xl">Upload fast or bulk embed without an app-side cap</h1>
+          <h1 className="mt-5 font-display text-5xl">Upload fast and control exactly what discovery cards show</h1>
 
           <div className="mt-6 rounded-[1.5rem] border border-dashed border-border bg-background/60 p-4">
             <div className="flex items-start gap-3">
               <Info className="mt-0.5 h-5 w-5 text-primary" />
               <p className="text-sm leading-7 text-muted-foreground">
-                Everything here stays local to this browser. You can create categories, channels, albums, stars, and custom images without any backend.
+                Everything here stays local to this browser. You can create categories, channels, albums, stars, and custom images with separate discovery thumbnails and no backend.
               </p>
             </div>
           </div>
@@ -387,21 +410,17 @@ export default function Upload() {
             <div className="flex items-start gap-3">
               <Info className="mt-0.5 h-5 w-5 text-primary" />
               <p className="text-sm leading-7 text-muted-foreground">
-                Custom thumbnail: Upload a separate image to use as the thumbnail across all gallery views. If not provided, the main image will be optimized as a thumbnail.
+                Custom thumbnail: upload a separate image to use across gallery cards. If you skip it, the main image will be optimized as the thumbnail.
               </p>
             </div>
           </div>
 
           <div className="mt-4">
             <Label className="mb-2 block">Custom thumbnail (optional)</Label>
-            <div className="relative">
-              <Input type="file" accept="image/*" onChange={handleCustomThumbnailChange} placeholder="Upload custom thumbnail" />
-            </div>
-            {customThumbnailUrl && (
-              <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-500/10 px-3 py-2 text-xs text-green-700">
-                <span>✓ Custom thumbnail ready</span>
-              </div>
-            )}
+            <Input type="file" accept="image/*" onChange={handleCustomThumbnailChange} />
+            {customThumbnailUrl ? (
+              <div className="mt-2 rounded-lg bg-green-500/10 px-3 py-2 text-xs text-green-700">Custom thumbnail ready</div>
+            ) : null}
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -422,15 +441,13 @@ export default function Upload() {
             </div>
           </div>
 
-          {customThumbnailUrl && (
-            <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-card/85 shadow-[0_22px_60px_rgba(18,20,34,0.08)]">
-              <img src={customThumbnailUrl} alt="Custom Thumbnail" className="h-[12rem] w-full object-cover" />
-              <div className="p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Custom thumbnail preview</p>
-                <p className="mt-1 text-sm text-green-600">✓ This will show in all gallery views</p>
-              </div>
+          <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-card/85 shadow-[0_22px_60px_rgba(18,20,34,0.08)]">
+            <img src={discoveryPreview} alt="Discovery thumbnail preview" className="h-[12rem] w-full object-cover" />
+            <div className="p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Discovery thumbnail preview</p>
+              <p className="mt-1 text-sm text-muted-foreground">This smaller image is what home and listing cards will show.</p>
             </div>
-          )}
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             {entitySections.map((section) => {
@@ -442,6 +459,12 @@ export default function Upload() {
                     <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">{section.title}</h3>
                   </div>
                   <div className="space-y-3">{section.body}</div>
+                  {entityPreviewImages[section.id] ? (
+                    <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-border/70 bg-background/60">
+                      <img src={entityPreviewImages[section.id]} alt={`${section.title} thumbnail preview`} className="h-28 w-full object-cover" />
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Entity discovery thumbnail preview</div>
+                    </div>
+                  ) : null}
                   <Button className="mt-4 w-full" variant="secondary" onClick={() => handleCreateEntity(section.id)}>
                     Save locally
                   </Button>
@@ -450,7 +473,7 @@ export default function Upload() {
             })}
           </div>
 
-          {recentCreated.length > 0 && (
+          {recentCreated.length > 0 ? (
             <div className="rounded-[2rem] border border-border/70 bg-card/85 p-5 shadow-[0_18px_50px_rgba(18,20,34,0.08)]">
               <div className="mb-4 flex items-center gap-2">
                 <Users className="h-4 w-4 text-primary" />
@@ -468,7 +491,7 @@ export default function Upload() {
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </section>
     </div>

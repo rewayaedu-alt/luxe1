@@ -643,6 +643,36 @@ export function getFeaturedAlbums(limit = 5) {
     .slice(0, limit);
 }
 
+export function getPrimaryNicheLabel(...values) {
+  for (const value of values) {
+    if (Array.isArray(value) && value.length) {
+      return titleize(slugify(value[0])) || value[0];
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "Featured";
+}
+
+export function getCategoryRepresentativeImage(category) {
+  return category?.thumbnailUrl || category?.coverImage || category?.preview?.thumbnailUrl || category?.preview?.url || "";
+}
+
+export function getChannelRepresentativeImage(channel) {
+  return channel?.thumbnailUrl || channel?.logoUrl || channel?.preview?.thumbnailUrl || channel?.preview?.url || "";
+}
+
+export function getStarRepresentativeImage(star) {
+  return star?.thumbnailUrl || star?.avatarUrl || star?.preview?.thumbnailUrl || star?.preview?.url || "";
+}
+
+export function getAlbumRepresentativeImage(album) {
+  return album?.thumbnailUrl || album?.coverImage || album?.preview?.thumbnailUrl || album?.preview?.url || "";
+}
+
 export function getCategorySummaries() {
   return getCategories()
     .map((category) => {
@@ -666,6 +696,34 @@ export function getChannelSummaries() {
         count: channelPhotos.length,
         views: channelPhotos.reduce((sum, photo) => sum + Number(photo.views || 0), 0),
         preview: channelPhotos[0] ?? null,
+      };
+    })
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+export function getStarSummaries() {
+  return getStars()
+    .map((star) => {
+      const starPhotos = getPhotosByStar(star.slug);
+      return {
+        ...star,
+        count: starPhotos.length,
+        views: starPhotos.reduce((sum, photo) => sum + Number(photo.views || 0), 0),
+        preview: starPhotos[0] ?? null,
+      };
+    })
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+export function getAlbumSummaries() {
+  return getAlbums()
+    .map((album) => {
+      const albumPhotos = getPhotosByAlbum(album.slug);
+      return {
+        ...album,
+        count: albumPhotos.length,
+        views: albumPhotos.reduce((sum, photo) => sum + Number(photo.views || 0), 0),
+        preview: albumPhotos[0] ?? null,
       };
     })
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
@@ -744,6 +802,94 @@ export function getTopCategoryTiles(limit = 9) {
   return getCategorySummaries().slice(0, limit);
 }
 
+export function getMixedDiscoveryFeed() {
+  const galleryCards = getPhotos()
+    .map((photo) => ({
+      id: `gallery-${photo.id}`,
+      entityId: photo.id,
+      type: "gallery",
+      href: `/photo/${photo.id}`,
+      title: photo.title,
+      subtitle: photo.photographer || "Gallery",
+      image: photo.thumbnailUrl || photo.url,
+      count: null,
+      niche: getPrimaryNicheLabel(photo.tags, getCategoryById(photo.category)?.name),
+      meta: `${photo.views || 0} views`,
+      score: scoreGallery(photo) + 100,
+    }))
+    .filter((item) => item.image);
+
+  const starCards = getStarSummaries()
+    .map((star) => ({
+      id: `star-${star.slug}`,
+      entityId: star.slug,
+      type: "star",
+      href: `/search?q=${encodeURIComponent(star.name)}`,
+      title: star.name,
+      subtitle: `${star.count} galleries`,
+      image: getStarRepresentativeImage(star),
+      count: star.count,
+      niche: getPrimaryNicheLabel(star.tags, star.preview?.tags, "Star"),
+      meta: `${star.views || 0} views`,
+      score: Number(star.views || 0) + Number(star.count || 0) * 40,
+    }))
+    .filter((item) => item.image);
+
+  const channelCards = getChannelSummaries()
+    .map((channel) => ({
+      id: `channel-${channel.slug}`,
+      entityId: channel.slug,
+      type: "channel",
+      href: `/channels/${channel.slug}`,
+      title: channel.name,
+      subtitle: channel.description,
+      image: getChannelRepresentativeImage(channel),
+      count: channel.count,
+      niche: getPrimaryNicheLabel(channel.tags, channel.preview?.tags, "Channel"),
+      meta: `${channel.count} galleries`,
+      score: Number(channel.views || 0) + Number(channel.count || 0) * 50,
+    }))
+    .filter((item) => item.image);
+
+  const categoryCards = getCategorySummaries()
+    .map((category) => ({
+      id: `category-${category.id}`,
+      entityId: category.id,
+      type: "category",
+      href: `/category/${category.id}`,
+      title: category.name,
+      subtitle: category.description,
+      image: getCategoryRepresentativeImage(category),
+      count: category.count,
+      niche: getPrimaryNicheLabel(category.preview?.tags, category.name),
+      meta: `${category.count} galleries`,
+      score: Number(category.views || 0) + Number(category.count || 0) * 50,
+    }))
+    .filter((item) => item.image);
+
+  const buckets = [
+    [...galleryCards].sort((a, b) => b.score - a.score),
+    [...starCards].sort((a, b) => b.score - a.score),
+    [...channelCards].sort((a, b) => b.score - a.score),
+    [...categoryCards].sort((a, b) => b.score - a.score),
+  ];
+  const mixed = [];
+  let hasItems = true;
+
+  while (hasItems) {
+    hasItems = false;
+
+    for (const bucket of buckets) {
+      if (bucket.length) {
+        mixed.push(bucket.shift());
+        hasItems = true;
+      }
+    }
+  }
+
+  return mixed;
+}
+
 export function searchCatalog(query) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
@@ -774,6 +920,7 @@ export function createCategory(input) {
     icon: input.icon || "Dot",
     description: input.description || "Custom category",
     coverImage: input.coverImage || input.logoUrl || seededCategories[0].coverImage,
+    thumbnailUrl: input.thumbnailUrl || input.coverImage || input.logoUrl || seededCategories[0].coverImage,
     custom: true,
   };
   const items = readStoredArray(STORAGE_KEYS.categories);
@@ -788,6 +935,7 @@ export function createChannel(input) {
     name: input.name,
     description: input.description || "Custom channel",
     logoUrl: input.logoUrl || seededChannels[0].logoUrl,
+    thumbnailUrl: input.thumbnailUrl || input.logoUrl || seededChannels[0].logoUrl,
     website: input.website || "",
     tags: input.tags || [],
     custom: true,
@@ -804,6 +952,7 @@ export function createAlbum(input) {
     name: input.name,
     description: input.description || "Custom album",
     coverImage: input.coverImage || seededAlbums[0].coverImage,
+    thumbnailUrl: input.thumbnailUrl || input.coverImage || seededAlbums[0].coverImage,
     channel: input.channel || "",
     star: input.star || "",
     custom: true,
@@ -820,6 +969,7 @@ export function createStar(input) {
     name: input.name,
     bio: input.bio || "Custom star profile",
     avatarUrl: input.avatarUrl || seededStars[0].avatarUrl,
+    thumbnailUrl: input.thumbnailUrl || input.avatarUrl || seededStars[0].avatarUrl,
     tags: input.tags || [],
     custom: true,
   };
