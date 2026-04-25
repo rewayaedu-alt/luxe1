@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/use-toast";
 import {
   createAlbum,
   createBulkEmbeddedPhotos,
@@ -104,6 +105,7 @@ export default function Upload() {
   const [previewUrl, setPreviewUrl] = useState("");
   const [customThumbnailUrl, setCustomThumbnailUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [entityForms, setEntityForms] = useState(defaultEntityForms);
   const [recentCreated, setRecentCreated] = useState([]);
   const [manageTab, setManageTab] = useState("gallery");
@@ -159,6 +161,7 @@ export default function Upload() {
     setSelectedFile(null);
     setPreviewUrl("");
     setCustomThumbnailUrl("");
+    setSaveError("");
   };
 
   const resetEditor = () => {
@@ -237,33 +240,12 @@ export default function Upload() {
 
   const handleSingleCreate = async () => {
     setSaving(true);
-    const sourceUrl = selectedFile ? previewUrl : hydratedForm.url.trim();
-    const photo = createPhotoEntry({
-      title: hydratedForm.title || "Untitled set",
-      photographer: hydratedForm.photographer || "Guest creator",
-      category: hydratedForm.category,
-      channel: hydratedForm.channel,
-      album: hydratedForm.album,
-      star: hydratedForm.star,
-      tags: toTagArray(hydratedForm.tags),
-      description: hydratedForm.description,
-      url: sourceUrl,
-      thumbnailUrl: customThumbnailUrl || buildThumbnail(sourceUrl),
-      sourceType: selectedFile ? "upload" : "embed",
-    });
-    setRecentCreated([photo]);
-    setSaving(false);
-    resetMainForm();
-    refreshCatalog();
-    navigate(`/uploaded/${photo.id}`, { state: { preview: photo } });
-  };
+    setSaveError("");
 
-  const handleBulkCreate = () => {
-    if (!parsedBulkUrls.length) return;
-    setSaving(true);
-    const created = createBulkEmbeddedPhotos(
-      parsedBulkUrls.map((url, index) => ({
-        title: `${hydratedForm.title || "Bulk set"} ${index + 1}`,
+    try {
+      const sourceUrl = selectedFile ? previewUrl : hydratedForm.url.trim();
+      const photo = createPhotoEntry({
+        title: hydratedForm.title || "Untitled set",
         photographer: hydratedForm.photographer || "Guest creator",
         category: hydratedForm.category,
         channel: hydratedForm.channel,
@@ -271,16 +253,63 @@ export default function Upload() {
         star: hydratedForm.star,
         tags: toTagArray(hydratedForm.tags),
         description: hydratedForm.description,
-        url,
-        thumbnailUrl: customThumbnailUrl || buildThumbnail(url),
-        sourceType: "embed",
-      }))
-    );
-    setRecentCreated(created);
-    setSaving(false);
-    setBulkUrls("");
-    refreshCatalog();
-    navigate(`/uploaded/${created[0].id}`, { state: { preview: created[0] } });
+        url: sourceUrl,
+        thumbnailUrl: customThumbnailUrl || buildThumbnail(sourceUrl),
+        sourceType: selectedFile ? "upload" : "embed",
+      });
+      setRecentCreated([photo]);
+      resetMainForm();
+      refreshCatalog();
+      navigate(`/uploaded/${photo.id}`, { state: { preview: photo } });
+    } catch (error) {
+      const message = "Could not save this gallery locally. Browser storage may be full.";
+      setSaveError(message);
+      toast({
+        title: "Local save failed",
+        description: message,
+      });
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBulkCreate = () => {
+    if (!parsedBulkUrls.length) return;
+    setSaving(true);
+    setSaveError("");
+
+    try {
+      const created = createBulkEmbeddedPhotos(
+        parsedBulkUrls.map((url, index) => ({
+          title: `${hydratedForm.title || "Bulk set"} ${index + 1}`,
+          photographer: hydratedForm.photographer || "Guest creator",
+          category: hydratedForm.category,
+          channel: hydratedForm.channel,
+          album: hydratedForm.album,
+          star: hydratedForm.star,
+          tags: toTagArray(hydratedForm.tags),
+          description: hydratedForm.description,
+          url,
+          thumbnailUrl: customThumbnailUrl || buildThumbnail(url),
+          sourceType: "embed",
+        }))
+      );
+      setRecentCreated(created);
+      setBulkUrls("");
+      refreshCatalog();
+      navigate(`/uploaded/${created[0].id}`, { state: { preview: created[0] } });
+    } catch (error) {
+      const message = "Could not save all embedded galleries locally. Try a smaller batch or clear old local data.";
+      setSaveError(message);
+      toast({
+        title: "Bulk embed failed",
+        description: message,
+      });
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const startEditing = (type, item) => {
@@ -676,6 +705,12 @@ export default function Upload() {
             </Button>
             <Button variant="secondary" onClick={resetMainForm}>Reset</Button>
           </div>
+
+          {saveError ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {saveError}
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-6">

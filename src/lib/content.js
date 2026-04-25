@@ -473,6 +473,13 @@ function upsertStoredItem(key, item, idField = "id") {
   writeStoredArray(key, [...items, item]);
 }
 
+function upsertStoredItems(key, incomingItems, idField = "id") {
+  if (!incomingItems?.length) return;
+  const incomingIds = new Set(incomingItems.map((item) => item[idField]));
+  const items = readStoredArray(key).filter((entry) => !incomingIds.has(entry[idField]));
+  writeStoredArray(key, [...items, ...incomingItems]);
+}
+
 function removeStoredItem(key, id, idField = "id") {
   writeStoredArray(
     key,
@@ -1275,10 +1282,12 @@ export function createBulkEmbeddedPhotos(items) {
     sourceType: input.sourceType || "embed",
     custom: true,
   }));
+  upsertStoredItems(STORAGE_KEYS.photos, created);
+  const deleted = readStoredSet(STORAGE_KEYS.deletedPhotos);
   for (const photo of created) {
-    upsertStoredItem(STORAGE_KEYS.photos, photo);
-    unmarkDeleted(STORAGE_KEYS.deletedPhotos, photo.id);
+    deleted.delete(photo.id);
   }
+  writeStoredSet(STORAGE_KEYS.deletedPhotos, deleted);
   return created;
 }
 
