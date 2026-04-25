@@ -159,20 +159,6 @@ async function seedDatabase() {
     }
 
     console.log('✅ Database seeded successfully!');
-    // Create default admin user if not exists
-    console.log('Ensuring admin user exists...');
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'adminpass';
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [adminEmail]);
-    if (existing.rows.length === 0) {
-      // Hash password using bcryptjs
-      const bcrypt = await import('bcryptjs');
-      const hash = await bcrypt.hash(adminPassword, 10);
-      await pool.query('INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4)', ['admin', adminEmail, hash, 'admin']);
-      console.log(`Created admin user ${adminEmail}`);
-    } else {
-      console.log('Admin user already exists');
-    }
   } catch (error) {
     console.error('❌ Error seeding database:', error.message);
     process.exit(1);

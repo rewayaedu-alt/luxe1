@@ -243,45 +243,7 @@ export default function Upload() {
     setSaveError("");
 
     try {
-      let sourceUrl = hydratedForm.url.trim();
-      if (selectedFile) {
-        // upload to server
-        const token = localStorage.getItem('app_access_token');
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        const res = await fetch('/api/admin/uploads', {
-          method: 'POST',
-          body: formData,
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        if (!res.ok) throw new Error('Upload failed');
-        const data = await res.json();
-        sourceUrl = data.url;
-      }
-      // Persist to server as well (best-effort)
-      const payload = {
-        title: hydratedForm.title || 'Untitled set',
-        slug: (hydratedForm.title || 'untitled').toLowerCase().replace(/\s+/g, '-'),
-        description: hydratedForm.description,
-        categoryId: hydratedForm.category,
-        photographer: hydratedForm.photographer,
-        tags: toTagArray(hydratedForm.tags),
-        images: [
-          {
-            url: sourceUrl,
-            thumbnailUrl: customThumbnailUrl || buildThumbnail(sourceUrl),
-          },
-        ],
-      };
-
-      let serverGallery = null;
-      try {
-        const res = await (await import('../services/galleryApi')).galleryApi.createGallery(payload);
-        serverGallery = res.gallery;
-      } catch (err) {
-        console.warn('Server create failed, falling back to local storage', err);
-      }
-
+      const sourceUrl = selectedFile ? previewUrl : hydratedForm.url.trim();
       const photo = createPhotoEntry({
         title: hydratedForm.title || "Untitled set",
         photographer: hydratedForm.photographer || "Guest creator",
@@ -298,12 +260,7 @@ export default function Upload() {
       setRecentCreated([photo]);
       resetMainForm();
       refreshCatalog();
-      // If server returned a gallery, navigate to server resource else local
-      if (serverGallery?.id) {
-        navigate(`/galleries/${serverGallery.slug}`);
-      } else {
-        navigate(`/uploaded/${photo.id}`, { state: { preview: photo } });
-      }
+      navigate(`/uploaded/${photo.id}`, { state: { preview: photo } });
     } catch (error) {
       const message = "Could not save this gallery locally. Browser storage may be full.";
       setSaveError(message);
