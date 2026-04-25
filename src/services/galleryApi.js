@@ -10,6 +10,23 @@ export const galleryApi = {
     return response.json();
   },
 
+  async createGallery(payload) {
+    const token = localStorage.getItem('app_access_token');
+    const res = await fetch(`${API_BASE_URL}/admin/galleries`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Create gallery failed: ${res.status} ${text}`);
+    }
+    return res.json();
+  },
+
   async getGalleryById(id) {
     const response = await fetch(`${API_BASE_URL}/galleries/${id}`);
     if (!response.ok) throw new Error('Gallery not found');

@@ -17,6 +17,10 @@ import TagPage from "./pages/TagPage";
 import Trending from "./pages/Trending";
 import Upload from "./pages/Upload";
 import UploadedPhotoDetail from "./pages/UploadedPhotoDetail";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminPanel from "./pages/AdminPanel";
+import AdminLogin from "./pages/AdminLogin";
+import { Navigate } from 'react-router-dom';
 
 export default function App() {
   return (
@@ -39,6 +43,10 @@ export default function App() {
             <Route path="/photo" element={<Navigate to="/" replace />} />
             <Route path="/photo/:photoId" element={<PhotoDetail />} />
             <Route path="/upload" element={<Upload />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/admin/login" replace />} />}>
+              <Route path="/admin" element={<AdminPanel />} />
+            </Route>
             <Route path="/uploaded/:photoId" element={<UploadedPhotoDetail />} />
             <Route path="*" element={<PageNotFound />} />
           </Route>
