@@ -1,0 +1,34 @@
+{
+  "name": "Channel",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Channel Name"
+    },
+    "slug": {
+      "type": "string",
+      "title": "Slug (URL key)"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "logo_url": {
+      "type": "string",
+      "title": "Logo URL"
+    },
+    "website": {
+      "type": "string",
+      "title": "Website URL"
+    },
+    "tags": {
+      "type": "string",
+      "title": "Related Tags (comma separated)"
+    }
+  },
+  "required": [
+    "name",
+    "slug"
+  ]
+}

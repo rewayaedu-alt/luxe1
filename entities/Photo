@@ -1,0 +1,69 @@
+{
+  "name": "Photo",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "url": {
+      "type": "string",
+      "title": "Image URL"
+    },
+    "category": {
+      "type": "string",
+      "title": "Category"
+    },
+    "channel": {
+      "type": "string",
+      "title": "Channel Slug"
+    },
+    "photographer": {
+      "type": "string",
+      "title": "Photographer Name"
+    },
+    "tags": {
+      "type": "string",
+      "title": "Tags (comma separated)"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    }
+  },
+  "required": [
+    "title",
+    "url",
+    "category"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    }
+  }
+}
