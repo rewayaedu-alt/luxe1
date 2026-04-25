@@ -21,7 +21,7 @@ export default function DiscoveryGrid({
           key={item.id || `${item.type}-${index}`}
           item={item}
           priority={index < 4}
-          aspect={index % 5 === 0 ? "aspect-[5/6]" : index % 3 === 0 ? "aspect-[4/5]" : "aspect-[1/1]"}
+          aspect={index % 6 === 0 ? "aspect-[5/7]" : index % 4 === 0 ? "aspect-[1/1]" : "aspect-[4/5]"}
         />
       ))}
     </div>

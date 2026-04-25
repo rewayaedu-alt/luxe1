@@ -1,9 +1,14 @@
 const STORAGE_KEYS = {
   categories: "stockpics.custom.categories",
+  deletedCategories: "stockpics.deleted.categories",
   channels: "stockpics.custom.channels",
+  deletedChannels: "stockpics.deleted.channels",
   albums: "stockpics.custom.albums",
+  deletedAlbums: "stockpics.deleted.albums",
   stars: "stockpics.custom.stars",
+  deletedStars: "stockpics.deleted.stars",
   photos: "stockpics.custom.photos",
+  deletedPhotos: "stockpics.deleted.photos",
 };
 
 function slugify(value = "") {
@@ -44,6 +49,14 @@ function readStoredArray(key) {
 function writeStoredArray(key, value) {
   if (!canUseStorage()) return;
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function readStoredSet(key) {
+  return new Set(readStoredArray(key));
+}
+
+function writeStoredSet(key, values) {
+  writeStoredArray(key, [...new Set(values)]);
 }
 
 const seededCategories = [
@@ -444,6 +457,41 @@ function mergeById(base, extra, idField = "id") {
   return [...base, ...extra.filter((item) => !seen.has(item[idField]))];
 }
 
+function mergeCatalog(base, stored, deletedKey, idField = "id") {
+  const deleted = readStoredSet(deletedKey);
+  const merged = new Map(base.map((item) => [item[idField], item]));
+
+  for (const item of stored) {
+    merged.set(item[idField], item);
+  }
+
+  return [...merged.values()].filter((item) => !deleted.has(item[idField]));
+}
+
+function upsertStoredItem(key, item, idField = "id") {
+  const items = readStoredArray(key).filter((entry) => entry[idField] !== item[idField]);
+  writeStoredArray(key, [...items, item]);
+}
+
+function removeStoredItem(key, id, idField = "id") {
+  writeStoredArray(
+    key,
+    readStoredArray(key).filter((entry) => entry[idField] !== id)
+  );
+}
+
+function markDeleted(key, id) {
+  const deleted = readStoredSet(key);
+  deleted.add(id);
+  writeStoredSet(key, deleted);
+}
+
+function unmarkDeleted(key, id) {
+  const deleted = readStoredSet(key);
+  deleted.delete(id);
+  writeStoredSet(key, deleted);
+}
+
 function sortByDateDesc(items, dateField = "publishedAt") {
   return [...items].sort((a, b) => new Date(b[dateField]).getTime() - new Date(a[dateField]).getTime());
 }
@@ -453,23 +501,23 @@ function scoreGallery(item) {
 }
 
 export function getCategories() {
-  return mergeById(seededCategories, readStoredArray(STORAGE_KEYS.categories));
+  return mergeCatalog(seededCategories, readStoredArray(STORAGE_KEYS.categories), STORAGE_KEYS.deletedCategories);
 }
 
 export function getChannels() {
-  return mergeById(seededChannels, readStoredArray(STORAGE_KEYS.channels), "slug");
+  return mergeCatalog(seededChannels, readStoredArray(STORAGE_KEYS.channels), STORAGE_KEYS.deletedChannels, "slug");
 }
 
 export function getStars() {
-  return mergeById(seededStars, readStoredArray(STORAGE_KEYS.stars), "slug");
+  return mergeCatalog(seededStars, readStoredArray(STORAGE_KEYS.stars), STORAGE_KEYS.deletedStars, "slug");
 }
 
 export function getAlbums() {
-  return mergeById(seededAlbums, readStoredArray(STORAGE_KEYS.albums), "slug");
+  return mergeCatalog(seededAlbums, readStoredArray(STORAGE_KEYS.albums), STORAGE_KEYS.deletedAlbums, "slug");
 }
 
 export function getPhotos() {
-  return mergeById(seededPhotos, readStoredArray(STORAGE_KEYS.photos));
+  return mergeCatalog(seededPhotos, readStoredArray(STORAGE_KEYS.photos), STORAGE_KEYS.deletedPhotos);
 }
 
 export function getCategoryById(categoryId) {
@@ -923,8 +971,8 @@ export function createCategory(input) {
     thumbnailUrl: input.thumbnailUrl || input.coverImage || input.logoUrl || seededCategories[0].coverImage,
     custom: true,
   };
-  const items = readStoredArray(STORAGE_KEYS.categories);
-  writeStoredArray(STORAGE_KEYS.categories, mergeById(items, [next]));
+  upsertStoredItem(STORAGE_KEYS.categories, next);
+  unmarkDeleted(STORAGE_KEYS.deletedCategories, next.id);
   return next;
 }
 
@@ -940,8 +988,8 @@ export function createChannel(input) {
     tags: input.tags || [],
     custom: true,
   };
-  const items = readStoredArray(STORAGE_KEYS.channels);
-  writeStoredArray(STORAGE_KEYS.channels, mergeById(items, [next], "slug"));
+  upsertStoredItem(STORAGE_KEYS.channels, next, "slug");
+  unmarkDeleted(STORAGE_KEYS.deletedChannels, next.slug);
   return next;
 }
 
@@ -957,8 +1005,8 @@ export function createAlbum(input) {
     star: input.star || "",
     custom: true,
   };
-  const items = readStoredArray(STORAGE_KEYS.albums);
-  writeStoredArray(STORAGE_KEYS.albums, mergeById(items, [next], "slug"));
+  upsertStoredItem(STORAGE_KEYS.albums, next, "slug");
+  unmarkDeleted(STORAGE_KEYS.deletedAlbums, next.slug);
   return next;
 }
 
@@ -973,8 +1021,8 @@ export function createStar(input) {
     tags: input.tags || [],
     custom: true,
   };
-  const items = readStoredArray(STORAGE_KEYS.stars);
-  writeStoredArray(STORAGE_KEYS.stars, mergeById(items, [next], "slug"));
+  upsertStoredItem(STORAGE_KEYS.stars, next, "slug");
+  unmarkDeleted(STORAGE_KEYS.deletedStars, next.slug);
   return next;
 }
 
@@ -998,13 +1046,12 @@ export function createPhotoEntry(input) {
     sourceType: input.sourceType || "embed",
     custom: true,
   };
-  const items = readStoredArray(STORAGE_KEYS.photos);
-  writeStoredArray(STORAGE_KEYS.photos, mergeById(items, [next]));
+  upsertStoredItem(STORAGE_KEYS.photos, next);
+  unmarkDeleted(STORAGE_KEYS.deletedPhotos, next.id);
   return next;
 }
 
 export function createBulkEmbeddedPhotos(items) {
-  const existing = readStoredArray(STORAGE_KEYS.photos);
   const created = items.map((input) => ({
     id: input.id || makeId("photo", input.title || "custom"),
     title: input.title || "Untitled",
@@ -1024,8 +1071,191 @@ export function createBulkEmbeddedPhotos(items) {
     sourceType: input.sourceType || "embed",
     custom: true,
   }));
-  writeStoredArray(STORAGE_KEYS.photos, mergeById(existing, created));
+  for (const photo of created) {
+    upsertStoredItem(STORAGE_KEYS.photos, photo);
+    unmarkDeleted(STORAGE_KEYS.deletedPhotos, photo.id);
+  }
   return created;
+}
+
+export function updateCategory(categoryId, input) {
+  const current = getCategoryById(categoryId);
+  if (!current) return null;
+
+  const next = {
+    ...current,
+    ...input,
+    id: current.id,
+    name: input.name || current.name,
+    description: input.description ?? current.description,
+    coverImage: input.coverImage || current.coverImage,
+    thumbnailUrl: input.thumbnailUrl || input.coverImage || current.thumbnailUrl || current.coverImage,
+  };
+
+  upsertStoredItem(STORAGE_KEYS.categories, next);
+  unmarkDeleted(STORAGE_KEYS.deletedCategories, categoryId);
+  return next;
+}
+
+export function updateChannel(channelSlug, input) {
+  const current = getChannelBySlug(channelSlug);
+  if (!current) return null;
+
+  const next = {
+    ...current,
+    ...input,
+    slug: current.slug,
+    id: current.id || current.slug,
+    name: input.name || current.name,
+    description: input.description ?? current.description,
+    logoUrl: input.logoUrl || current.logoUrl,
+    thumbnailUrl: input.thumbnailUrl || input.logoUrl || current.thumbnailUrl || current.logoUrl,
+    website: input.website ?? current.website ?? "",
+    tags: input.tags || current.tags || [],
+  };
+
+  upsertStoredItem(STORAGE_KEYS.channels, next, "slug");
+  unmarkDeleted(STORAGE_KEYS.deletedChannels, channelSlug);
+  return next;
+}
+
+export function updateAlbum(albumSlug, input) {
+  const current = getAlbumBySlug(albumSlug);
+  if (!current) return null;
+
+  const next = {
+    ...current,
+    ...input,
+    slug: current.slug,
+    id: current.id || current.slug,
+    name: input.name || current.name,
+    description: input.description ?? current.description,
+    coverImage: input.coverImage || current.coverImage,
+    thumbnailUrl: input.thumbnailUrl || input.coverImage || current.thumbnailUrl || current.coverImage,
+    channel: input.channel ?? current.channel ?? "",
+    star: input.star ?? current.star ?? "",
+  };
+
+  upsertStoredItem(STORAGE_KEYS.albums, next, "slug");
+  unmarkDeleted(STORAGE_KEYS.deletedAlbums, albumSlug);
+  return next;
+}
+
+export function updateStar(starSlug, input) {
+  const current = getStarBySlug(starSlug);
+  if (!current) return null;
+
+  const next = {
+    ...current,
+    ...input,
+    slug: current.slug,
+    id: current.id || current.slug,
+    name: input.name || current.name,
+    bio: input.bio ?? current.bio,
+    avatarUrl: input.avatarUrl || current.avatarUrl,
+    thumbnailUrl: input.thumbnailUrl || input.avatarUrl || current.thumbnailUrl || current.avatarUrl,
+    tags: input.tags || current.tags || [],
+  };
+
+  upsertStoredItem(STORAGE_KEYS.stars, next, "slug");
+  unmarkDeleted(STORAGE_KEYS.deletedStars, starSlug);
+  return next;
+}
+
+export function updatePhotoEntry(photoId, input) {
+  const current = getPhotoById(photoId);
+  if (!current) return null;
+
+  const next = {
+    ...current,
+    ...input,
+    id: current.id,
+    title: input.title || current.title,
+    url: input.url || current.url,
+    thumbnailUrl: input.thumbnailUrl || current.thumbnailUrl || input.url || current.url,
+    category: input.category ?? current.category,
+    channel: input.channel ?? current.channel,
+    album: input.album ?? current.album,
+    star: input.star ?? current.star,
+    photographer: input.photographer ?? current.photographer,
+    tags: input.tags || current.tags || [],
+    description: input.description ?? current.description,
+    views: input.views ?? current.views ?? 0,
+    likes: input.likes ?? current.likes ?? 0,
+    featured: typeof input.featured === "boolean" ? input.featured : !!current.featured,
+    publishedAt: input.publishedAt || current.publishedAt,
+  };
+
+  upsertStoredItem(STORAGE_KEYS.photos, next);
+  unmarkDeleted(STORAGE_KEYS.deletedPhotos, photoId);
+  return next;
+}
+
+function getFallbackCategoryId(excludeId) {
+  return getCategories().find((item) => item.id !== excludeId)?.id || seededCategories.find((item) => item.id !== excludeId)?.id || "";
+}
+
+function getFallbackChannelSlug(excludeSlug) {
+  return getChannels().find((item) => item.slug !== excludeSlug)?.slug || seededChannels.find((item) => item.slug !== excludeSlug)?.slug || "";
+}
+
+function getFallbackStarSlug(excludeSlug) {
+  return getStars().find((item) => item.slug !== excludeSlug)?.slug || seededStars.find((item) => item.slug !== excludeSlug)?.slug || "";
+}
+
+function getFallbackAlbumSlug(excludeSlug) {
+  return getAlbums().find((item) => item.slug !== excludeSlug)?.slug || seededAlbums.find((item) => item.slug !== excludeSlug)?.slug || "";
+}
+
+export function deleteCategory(categoryId) {
+  removeStoredItem(STORAGE_KEYS.categories, categoryId);
+  markDeleted(STORAGE_KEYS.deletedCategories, categoryId);
+
+  const fallbackCategory = getFallbackCategoryId(categoryId);
+  for (const photo of getPhotos().filter((item) => item.category === categoryId)) {
+    upsertStoredItem(STORAGE_KEYS.photos, { ...photo, category: fallbackCategory, custom: true });
+  }
+}
+
+export function deleteChannel(channelSlug) {
+  removeStoredItem(STORAGE_KEYS.channels, channelSlug, "slug");
+  markDeleted(STORAGE_KEYS.deletedChannels, channelSlug);
+
+  const fallbackChannel = getFallbackChannelSlug(channelSlug);
+  for (const photo of getPhotos().filter((item) => item.channel === channelSlug)) {
+    upsertStoredItem(STORAGE_KEYS.photos, { ...photo, channel: fallbackChannel, custom: true });
+  }
+  for (const album of getAlbums().filter((item) => item.channel === channelSlug)) {
+    upsertStoredItem(STORAGE_KEYS.albums, { ...album, channel: fallbackChannel, custom: true }, "slug");
+  }
+}
+
+export function deleteAlbum(albumSlug) {
+  removeStoredItem(STORAGE_KEYS.albums, albumSlug, "slug");
+  markDeleted(STORAGE_KEYS.deletedAlbums, albumSlug);
+
+  const fallbackAlbum = getFallbackAlbumSlug(albumSlug);
+  for (const photo of getPhotos().filter((item) => item.album === albumSlug)) {
+    upsertStoredItem(STORAGE_KEYS.photos, { ...photo, album: fallbackAlbum, custom: true });
+  }
+}
+
+export function deleteStar(starSlug) {
+  removeStoredItem(STORAGE_KEYS.stars, starSlug, "slug");
+  markDeleted(STORAGE_KEYS.deletedStars, starSlug);
+
+  const fallbackStar = getFallbackStarSlug(starSlug);
+  for (const photo of getPhotos().filter((item) => item.star === starSlug)) {
+    upsertStoredItem(STORAGE_KEYS.photos, { ...photo, star: fallbackStar, custom: true });
+  }
+  for (const album of getAlbums().filter((item) => item.star === starSlug)) {
+    upsertStoredItem(STORAGE_KEYS.albums, { ...album, star: fallbackStar, custom: true }, "slug");
+  }
+}
+
+export function deletePhotoEntry(photoId) {
+  removeStoredItem(STORAGE_KEYS.photos, photoId);
+  markDeleted(STORAGE_KEYS.deletedPhotos, photoId);
 }
 
 export function createDemoPreview(overrides = {}) {

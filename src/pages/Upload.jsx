@@ -1,6 +1,19 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FolderPlus, Images, Info, Link as LinkIcon, PlusCircle, Star, Upload as UploadIcon, Users } from "lucide-react";
+import {
+  FolderPlus,
+  Images,
+  Info,
+  Link as LinkIcon,
+  Pencil,
+  PlusCircle,
+  Save,
+  Star,
+  Trash2,
+  Upload as UploadIcon,
+  Users,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,10 +26,19 @@ import {
   createChannel,
   createPhotoEntry,
   createStar,
+  deleteCategory,
+  deleteChannel,
+  deletePhotoEntry,
+  deleteStar,
   getAlbums,
   getCategories,
   getChannels,
+  getPhotos,
   getStars,
+  updateCategory,
+  updateChannel,
+  updatePhotoEntry,
+  updateStar,
 } from "../lib/content";
 import { optimizeImageUrl } from "../lib/imageUtils";
 
@@ -39,8 +61,19 @@ const defaultEntityForms = {
   star: { name: "", bio: "", avatarUrl: "", tags: "", thumbnailUrl: "" },
 };
 
+const managerTabs = [
+  { id: "gallery", label: "Galleries" },
+  { id: "category", label: "Categories" },
+  { id: "channel", label: "Channels" },
+  { id: "star", label: "Stars" },
+];
+
 function toTagArray(value) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function tagsToString(value) {
+  return Array.isArray(value) ? value.join(", ") : "";
 }
 
 function fileToDataUrl(file) {
@@ -57,6 +90,10 @@ function buildThumbnail(url) {
   return optimizeImageUrl(url, 480, 72);
 }
 
+function sortByRecent(items, field = "publishedAt") {
+  return [...items].sort((a, b) => new Date(b[field] || 0).getTime() - new Date(a[field] || 0).getTime());
+}
+
 export default function Upload() {
   const navigate = useNavigate();
   const [catalogVersion, setCatalogVersion] = useState(0);
@@ -69,11 +106,15 @@ export default function Upload() {
   const [saving, setSaving] = useState(false);
   const [entityForms, setEntityForms] = useState(defaultEntityForms);
   const [recentCreated, setRecentCreated] = useState([]);
+  const [manageTab, setManageTab] = useState("gallery");
+  const [editing, setEditing] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
 
   const categories = useMemo(() => getCategories(), [catalogVersion]);
   const channels = useMemo(() => getChannels(), [catalogVersion]);
   const albums = useMemo(() => getAlbums(), [catalogVersion]);
   const stars = useMemo(() => getStars(), [catalogVersion]);
+  const photos = useMemo(() => sortByRecent(getPhotos()), [catalogVersion]);
 
   const hydratedForm = {
     ...form,
@@ -94,6 +135,13 @@ export default function Upload() {
     star: entityForms.star.thumbnailUrl || entityForms.star.avatarUrl,
   };
 
+  const managementItems = {
+    gallery: photos,
+    category: categories,
+    channel: channels,
+    star: stars,
+  };
+
   const refreshCatalog = () => setCatalogVersion((value) => value + 1);
 
   const updateEntityForm = (entity, key, value) => {
@@ -111,6 +159,11 @@ export default function Upload() {
     setSelectedFile(null);
     setPreviewUrl("");
     setCustomThumbnailUrl("");
+  };
+
+  const resetEditor = () => {
+    setEditing(null);
+    setEditDraft(null);
   };
 
   const handleFileChange = async (event) => {
@@ -185,7 +238,6 @@ export default function Upload() {
   const handleSingleCreate = async () => {
     setSaving(true);
     const sourceUrl = selectedFile ? previewUrl : hydratedForm.url.trim();
-    const customThumb = customThumbnailUrl || buildThumbnail(sourceUrl);
     const photo = createPhotoEntry({
       title: hydratedForm.title || "Untitled set",
       photographer: hydratedForm.photographer || "Guest creator",
@@ -196,12 +248,13 @@ export default function Upload() {
       tags: toTagArray(hydratedForm.tags),
       description: hydratedForm.description,
       url: sourceUrl,
-      thumbnailUrl: customThumb,
+      thumbnailUrl: customThumbnailUrl || buildThumbnail(sourceUrl),
       sourceType: selectedFile ? "upload" : "embed",
     });
     setRecentCreated([photo]);
     setSaving(false);
     resetMainForm();
+    refreshCatalog();
     navigate(`/uploaded/${photo.id}`, { state: { preview: photo } });
   };
 
@@ -226,7 +279,127 @@ export default function Upload() {
     setRecentCreated(created);
     setSaving(false);
     setBulkUrls("");
+    refreshCatalog();
     navigate(`/uploaded/${created[0].id}`, { state: { preview: created[0] } });
+  };
+
+  const startEditing = (type, item) => {
+    if (type === "gallery") {
+      setEditing({ type, id: item.id });
+      setEditDraft({
+        title: item.title || "",
+        photographer: item.photographer || "",
+        category: item.category || categories[0]?.id || "",
+        channel: item.channel || channels[0]?.slug || "",
+        album: item.album || albums[0]?.slug || "",
+        star: item.star || stars[0]?.slug || "",
+        tags: tagsToString(item.tags),
+        description: item.description || "",
+        url: item.url || "",
+        thumbnailUrl: item.thumbnailUrl || "",
+      });
+      return;
+    }
+
+    if (type === "category") {
+      setEditing({ type, id: item.id });
+      setEditDraft({
+        name: item.name || "",
+        description: item.description || "",
+        coverImage: item.coverImage || "",
+        thumbnailUrl: item.thumbnailUrl || "",
+      });
+      return;
+    }
+
+    if (type === "channel") {
+      setEditing({ type, id: item.slug });
+      setEditDraft({
+        name: item.name || "",
+        description: item.description || "",
+        logoUrl: item.logoUrl || "",
+        thumbnailUrl: item.thumbnailUrl || "",
+        website: item.website || "",
+        tags: tagsToString(item.tags),
+      });
+      return;
+    }
+
+    setEditing({ type, id: item.slug });
+    setEditDraft({
+      name: item.name || "",
+      bio: item.bio || "",
+      avatarUrl: item.avatarUrl || "",
+      thumbnailUrl: item.thumbnailUrl || "",
+      tags: tagsToString(item.tags),
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editing || !editDraft) return;
+
+    if (editing.type === "gallery") {
+      updatePhotoEntry(editing.id, {
+        title: editDraft.title.trim(),
+        photographer: editDraft.photographer.trim(),
+        category: editDraft.category,
+        channel: editDraft.channel,
+        album: editDraft.album,
+        star: editDraft.star,
+        tags: toTagArray(editDraft.tags),
+        description: editDraft.description.trim(),
+        url: editDraft.url.trim(),
+        thumbnailUrl: editDraft.thumbnailUrl.trim() || buildThumbnail(editDraft.url.trim()),
+      });
+    }
+
+    if (editing.type === "category") {
+      updateCategory(editing.id, {
+        name: editDraft.name.trim(),
+        description: editDraft.description.trim(),
+        coverImage: editDraft.coverImage.trim(),
+        thumbnailUrl: editDraft.thumbnailUrl.trim(),
+      });
+    }
+
+    if (editing.type === "channel") {
+      updateChannel(editing.id, {
+        name: editDraft.name.trim(),
+        description: editDraft.description.trim(),
+        logoUrl: editDraft.logoUrl.trim(),
+        thumbnailUrl: editDraft.thumbnailUrl.trim(),
+        website: editDraft.website.trim(),
+        tags: toTagArray(editDraft.tags),
+      });
+    }
+
+    if (editing.type === "star") {
+      updateStar(editing.id, {
+        name: editDraft.name.trim(),
+        bio: editDraft.bio.trim(),
+        avatarUrl: editDraft.avatarUrl.trim(),
+        thumbnailUrl: editDraft.thumbnailUrl.trim(),
+        tags: toTagArray(editDraft.tags),
+      });
+    }
+
+    refreshCatalog();
+    resetEditor();
+  };
+
+  const handleDelete = (type, item) => {
+    const label = type === "gallery" ? item.title : item.name;
+    if (!window.confirm(`Delete ${label}? This will only affect this browser.`)) return;
+
+    if (type === "gallery") deletePhotoEntry(item.id);
+    if (type === "category") deleteCategory(item.id);
+    if (type === "channel") deleteChannel(item.slug);
+    if (type === "star") deleteStar(item.slug);
+
+    refreshCatalog();
+    if (editing && ((type === "gallery" && editing.id === item.id) || (type !== "gallery" && editing.id === item.slug) || (type === "category" && editing.id === item.id))) {
+      resetEditor();
+    }
   };
 
   const entitySections = [
@@ -299,6 +472,79 @@ export default function Upload() {
     },
   ];
 
+  const renderEditForm = () => {
+    if (!editing || !editDraft) return null;
+
+    if (editing.type === "gallery") {
+      return (
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input value={editDraft.title} onChange={(event) => setEditDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Gallery title" />
+            <Input value={editDraft.photographer} onChange={(event) => setEditDraft((current) => ({ ...current, photographer: event.target.value }))} placeholder="Photographer" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Select value={editDraft.category} onValueChange={(value) => setEditDraft((current) => ({ ...current, category: value }))}>
+              <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
+              <SelectContent>{categories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={editDraft.channel} onValueChange={(value) => setEditDraft((current) => ({ ...current, channel: value }))}>
+              <SelectTrigger><SelectValue placeholder="Channel" /></SelectTrigger>
+              <SelectContent>{channels.map((channel) => <SelectItem key={channel.slug} value={channel.slug}>{channel.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Select value={editDraft.album} onValueChange={(value) => setEditDraft((current) => ({ ...current, album: value }))}>
+              <SelectTrigger><SelectValue placeholder="Album" /></SelectTrigger>
+              <SelectContent>{albums.map((album) => <SelectItem key={album.slug} value={album.slug}>{album.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={editDraft.star} onValueChange={(value) => setEditDraft((current) => ({ ...current, star: value }))}>
+              <SelectTrigger><SelectValue placeholder="Star" /></SelectTrigger>
+              <SelectContent>{stars.map((star) => <SelectItem key={star.slug} value={star.slug}>{star.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <Input value={editDraft.tags} onChange={(event) => setEditDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="Tags" />
+          <Input value={editDraft.url} onChange={(event) => setEditDraft((current) => ({ ...current, url: event.target.value }))} placeholder="Image URL" />
+          <Input value={editDraft.thumbnailUrl} onChange={(event) => setEditDraft((current) => ({ ...current, thumbnailUrl: event.target.value }))} placeholder="Thumbnail URL" />
+          <Textarea rows={3} value={editDraft.description} onChange={(event) => setEditDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Description" />
+        </div>
+      );
+    }
+
+    if (editing.type === "category") {
+      return (
+        <div className="space-y-4">
+          <Input value={editDraft.name} onChange={(event) => setEditDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Category name" />
+          <Input value={editDraft.coverImage} onChange={(event) => setEditDraft((current) => ({ ...current, coverImage: event.target.value }))} placeholder="Cover image URL" />
+          <Input value={editDraft.thumbnailUrl} onChange={(event) => setEditDraft((current) => ({ ...current, thumbnailUrl: event.target.value }))} placeholder="Thumbnail URL" />
+          <Textarea rows={3} value={editDraft.description} onChange={(event) => setEditDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Description" />
+        </div>
+      );
+    }
+
+    if (editing.type === "channel") {
+      return (
+        <div className="space-y-4">
+          <Input value={editDraft.name} onChange={(event) => setEditDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Channel name" />
+          <Input value={editDraft.logoUrl} onChange={(event) => setEditDraft((current) => ({ ...current, logoUrl: event.target.value }))} placeholder="Logo URL" />
+          <Input value={editDraft.thumbnailUrl} onChange={(event) => setEditDraft((current) => ({ ...current, thumbnailUrl: event.target.value }))} placeholder="Thumbnail URL" />
+          <Input value={editDraft.website} onChange={(event) => setEditDraft((current) => ({ ...current, website: event.target.value }))} placeholder="Website" />
+          <Input value={editDraft.tags} onChange={(event) => setEditDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="Tags" />
+          <Textarea rows={3} value={editDraft.description} onChange={(event) => setEditDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Description" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <Input value={editDraft.name} onChange={(event) => setEditDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Star name" />
+        <Input value={editDraft.avatarUrl} onChange={(event) => setEditDraft((current) => ({ ...current, avatarUrl: event.target.value }))} placeholder="Avatar URL" />
+        <Input value={editDraft.thumbnailUrl} onChange={(event) => setEditDraft((current) => ({ ...current, thumbnailUrl: event.target.value }))} placeholder="Thumbnail URL" />
+        <Input value={editDraft.tags} onChange={(event) => setEditDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="Tags" />
+        <Textarea rows={3} value={editDraft.bio} onChange={(event) => setEditDraft((current) => ({ ...current, bio: event.target.value }))} placeholder="Bio" />
+      </div>
+    );
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -313,7 +559,7 @@ export default function Upload() {
             <div className="flex items-start gap-3">
               <Info className="mt-0.5 h-5 w-5 text-primary" />
               <p className="text-sm leading-7 text-muted-foreground">
-                Everything here stays local to this browser. You can create categories, channels, albums, stars, and custom images with separate discovery thumbnails and no backend.
+                Everything here stays local to this browser. You can create, edit, and delete categories, channels, galleries, and stars without a backend.
               </p>
             </div>
           </div>
@@ -330,7 +576,7 @@ export default function Upload() {
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div>
               <Label className="mb-2 block">Title</Label>
-              <Input value={hydratedForm.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder={mode === "bulk" ? "After dark drop" : "Single hero title"} />
+              <Input value={hydratedForm.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder={mode === "bulk" ? "After dark drop" : "Single gallery title"} />
             </div>
             <div>
               <Label className="mb-2 block">Photographer</Label>
@@ -401,7 +647,7 @@ export default function Upload() {
               <Label className="mb-2 block">Bulk embed URLs</Label>
               <Textarea rows={7} value={bulkUrls} onChange={(event) => setBulkUrls(event.target.value)} placeholder={"https://example.com/shot-01.jpg\nhttps://example.com/shot-02.jpg\nhttps://example.com/shot-03.jpg"} />
               <p className="mt-2 text-xs text-muted-foreground">
-                {parsedBulkUrls.length} URLs ready. The app does not impose a bulk embed cap, though very large drops are still subject to browser memory and local storage limits.
+                {parsedBulkUrls.length} URLs ready. Large batches still depend on browser memory and local storage limits.
               </p>
             </div>
           )}
@@ -426,7 +672,7 @@ export default function Upload() {
           <div className="mt-8 flex flex-wrap gap-3">
             <Button onClick={mode === "single" ? handleSingleCreate : handleBulkCreate} disabled={saving || (mode === "single" ? !(previewUrl || hydratedForm.url) : !parsedBulkUrls.length)}>
               <UploadIcon className="mr-2 h-4 w-4" />
-              {saving ? "Saving locally..." : mode === "single" ? "Create local image" : `Embed ${parsedBulkUrls.length || ""} images`}
+              {saving ? "Saving locally..." : mode === "single" ? "Create local gallery" : `Embed ${parsedBulkUrls.length || ""} galleries`}
             </Button>
             <Button variant="secondary" onClick={resetMainForm}>Reset</Button>
           </div>
@@ -492,6 +738,104 @@ export default function Upload() {
               </div>
             </div>
           ) : null}
+        </div>
+      </section>
+
+      <section className="mt-8 rounded-[2rem] border border-border/70 bg-card/85 p-6 shadow-[0_22px_60px_rgba(18,20,34,0.08)]">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Catalog manager</p>
+            <h2 className="mt-2 text-3xl font-semibold">Edit or delete galleries, stars, channels, and categories</h2>
+          </div>
+          <div className="flex flex-wrap gap-2 rounded-full bg-secondary p-1">
+            {managerTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setManageTab(tab.id);
+                  resetEditor();
+                }}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${manageTab === tab.id ? "bg-foreground text-background" : "text-muted-foreground"}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {managementItems[manageTab].map((item) => {
+            const itemId = manageTab === "gallery" ? item.id : manageTab === "category" ? item.id : item.slug;
+            const title = manageTab === "gallery" ? item.title : item.name;
+            const description =
+              manageTab === "gallery"
+                ? item.description || item.photographer
+                : manageTab === "category"
+                  ? item.description
+                  : manageTab === "channel"
+                    ? item.description
+                    : item.bio;
+            const image =
+              manageTab === "gallery"
+                ? item.thumbnailUrl || item.url
+                : manageTab === "category"
+                  ? item.thumbnailUrl || item.coverImage
+                  : manageTab === "channel"
+                    ? item.thumbnailUrl || item.logoUrl
+                    : item.thumbnailUrl || item.avatarUrl;
+            const meta =
+              manageTab === "gallery"
+                ? `${item.views || 0} views`
+                : manageTab === "category"
+                  ? `${photos.filter((photo) => photo.category === item.id).length} galleries`
+                  : manageTab === "channel"
+                    ? `${photos.filter((photo) => photo.channel === item.slug).length} galleries`
+                    : `${photos.filter((photo) => photo.star === item.slug).length} galleries`;
+            const isEditing = editing?.type === manageTab && editing?.id === itemId;
+
+            return (
+              <div key={itemId} className="overflow-hidden rounded-[1.6rem] border border-border/70 bg-background/80">
+                {image ? <img src={optimizeImageUrl(image, 900)} alt={title} className="h-48 w-full object-cover" /> : null}
+                <div className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-semibold">{title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{meta}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" variant="secondary" onClick={() => startEditing(manageTab, item)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => handleDelete(manageTab, item)}>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+
+                  {!isEditing ? (
+                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{description || "No extra details yet."}</p>
+                  ) : (
+                    <div className="mt-4 rounded-[1.4rem] border border-border/70 bg-card p-4">
+                      {renderEditForm()}
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <Button type="button" onClick={handleSaveEdit}>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save changes
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={resetEditor}>
+                          <X className="mr-2 h-4 w-4" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
     </div>
