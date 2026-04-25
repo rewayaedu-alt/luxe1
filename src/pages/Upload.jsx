@@ -243,7 +243,21 @@ export default function Upload() {
     setSaveError("");
 
     try {
-      const sourceUrl = selectedFile ? previewUrl : hydratedForm.url.trim();
+      let sourceUrl = hydratedForm.url.trim();
+      if (selectedFile) {
+        // upload to server
+        const token = localStorage.getItem('app_access_token');
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        const res = await fetch('/api/admin/uploads', {
+          method: 'POST',
+          body: formData,
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (!res.ok) throw new Error('Upload failed');
+        const data = await res.json();
+        sourceUrl = data.url;
+      }
       const photo = createPhotoEntry({
         title: hydratedForm.title || "Untitled set",
         photographer: hydratedForm.photographer || "Guest creator",

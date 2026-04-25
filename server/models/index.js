@@ -1,4 +1,5 @@
 import pool from '../db/connection.js';
+import bcrypt from 'bcryptjs';
 
 export class Gallery {
   static async findAll(page = 1, limit = 24, sort = 'latest') {
@@ -140,6 +141,31 @@ export class Gallery {
     return result.rows[0];
   }
 
+  static async update(id, data) {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    if (data.title !== undefined) { fields.push(`title = $${idx++}`); values.push(data.title); }
+    if (data.slug !== undefined) { fields.push(`slug = $${idx++}`); values.push(data.slug); }
+    if (data.description !== undefined) { fields.push(`description = $${idx++}`); values.push(data.description); }
+    if (data.categoryId !== undefined) { fields.push(`category_id = $${idx++}`); values.push(data.categoryId); }
+    if (data.photographer !== undefined) { fields.push(`photographer = $${idx++}`); values.push(data.photographer); }
+    if (data.is_featured !== undefined) { fields.push(`is_featured = $${idx++}`); values.push(data.is_featured); }
+
+    if (fields.length === 0) return await this.findById(id);
+
+    const query = `UPDATE galleries SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`;
+    values.push(id);
+    const result = await pool.query(query, values);
+    return result.rows[0];
+  }
+
+  static async delete(id) {
+    await pool.query('DELETE FROM galleries WHERE id = $1', [id]);
+    return true;
+  }
+
   static async incrementViews(id) {
     await pool.query('UPDATE galleries SET view_count = view_count + 1 WHERE id = $1', [id]);
   }
@@ -258,5 +284,42 @@ export class Image {
       [galleryId]
     );
     return result.rows;
+  }
+}
+
+export class User {
+  static async findByEmail(email) {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    return result.rows[0] || null;
+  }
+
+  static async findById(id) {
+    const result = await pool.query('SELECT id, username, email, role, created_at FROM users WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  }
+
+  static async create({ username, email, password, role = 'viewer' }) {
+    const passwordHash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
+      [username, email, passwordHash, role]
+    );
+    return result.rows[0];
+  }
+
+  static async validatePassword(email, password) {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
+    if (!user) return null;
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return null;
+    // remove sensitive fields
+    delete user.password_hash;
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role
+    };
   }
 }

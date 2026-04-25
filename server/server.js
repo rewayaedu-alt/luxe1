@@ -7,7 +7,11 @@ import galleriesRouter from './routes/galleries.js';
 import categoriesRouter from './routes/categories.js';
 import tagsRouter from './routes/search.js';
 import searchRouter from './routes/search-routes.js';
+import authRouter from './routes/auth.js';
+import adminUploadsRouter from './routes/admin-uploads.js';
+import adminGalleriesRouter from './routes/admin-galleries.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import path from 'path';
 
 dotenv.config();
 
@@ -23,6 +27,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve uploaded files
+app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_DIR || './uploads')));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -33,6 +40,9 @@ app.use('/api/galleries', galleriesRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/tags', tagsRouter);
 app.use('/api/search', searchRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/admin/uploads', adminUploadsRouter);
+app.use('/api/admin/galleries', adminGalleriesRouter);
 
 // 404 handler
 app.use(notFoundHandler);
