@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { buildGalleryCardFeed } from "../lib/content";
 import { getGalleryPrimaryImage, normalizeGalleryStats } from "../lib/galleryUtils";
 import { optimizeImageUrl } from "../lib/imageUtils";
 
@@ -51,7 +52,9 @@ export default function GalleryGrid({
   emptyCopy = "Try another path through the catalog.",
   mode = "default",
 }) {
-  if (!photos.length) {
+  const galleryCards = buildGalleryCardFeed(photos);
+
+  if (!galleryCards.length) {
     return (
       <div className="rounded-[1.75rem] border border-dashed border-white/10 bg-card/65 px-6 py-16 text-center">
         <h3 className="text-xl font-semibold text-white">{emptyTitle}</h3>
@@ -62,7 +65,7 @@ export default function GalleryGrid({
 
   return (
     <div className="columns-2 gap-4 lg:columns-3 2xl:columns-5">
-      {photos.map((photo) => (
+      {galleryCards.map((photo) => (
         <GalleryCard key={photo.id} photo={photo} mode={mode} />
       ))}
     </div>

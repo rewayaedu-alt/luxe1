@@ -500,6 +500,54 @@ function scoreGallery(item) {
   return Number(item.views || 0) + Number(item.likes || 0) * 10;
 }
 
+function getGalleryGroupKey(item) {
+  return item?.album || item?.id || "";
+}
+
+function getGalleryDisplayTitle(photo) {
+  if (!photo) return "Untitled";
+  const album = photo.album ? getAlbumBySlug(photo.album) : null;
+  return album?.name || photo.title || "Untitled";
+}
+
+export function buildGalleryCardFeed(items = getPhotos()) {
+  const groups = new Map();
+
+  for (const photo of items) {
+    const key = getGalleryGroupKey(photo);
+    if (!key) continue;
+
+    const current = groups.get(key) ?? [];
+    current.push(photo);
+    groups.set(key, current);
+  }
+
+  return [...groups.entries()].map(([galleryKey, galleryPhotos]) => {
+    const rankedPhotos = [...galleryPhotos].sort((a, b) => {
+      if (Boolean(a.featured) !== Boolean(b.featured)) {
+        return Number(Boolean(b.featured)) - Number(Boolean(a.featured));
+      }
+
+      return scoreGallery(b) - scoreGallery(a) || new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime();
+    });
+    const representative = rankedPhotos[0];
+    const album = representative?.album ? getAlbumBySlug(representative.album) : null;
+
+    return {
+      ...representative,
+      galleryKey,
+      title: album?.name || representative?.title || "Untitled",
+      url: album?.coverImage || representative?.url,
+      thumbnailUrl: album?.thumbnailUrl || album?.coverImage || representative?.thumbnailUrl || representative?.url,
+      views: galleryPhotos.reduce((sum, photo) => sum + Number(photo.views || 0), 0),
+      likes: galleryPhotos.reduce((sum, photo) => sum + Number(photo.likes || 0), 0),
+      publishedAt: sortByDateDesc(galleryPhotos)[0]?.publishedAt || representative?.publishedAt,
+      images: sortByDateDesc(galleryPhotos),
+      imageCount: galleryPhotos.length,
+    };
+  });
+}
+
 export function getCategories() {
   return mergeCatalog(seededCategories, readStoredArray(STORAGE_KEYS.categories), STORAGE_KEYS.deletedCategories);
 }
@@ -840,11 +888,13 @@ function getLatestPublishedAt(photos) {
 }
 
 export function getSortedGalleryFeed(mode = "popular", items = getPhotos()) {
+  const galleries = buildGalleryCardFeed(items);
+
   if (mode === "recent") {
-    return sortByDateDesc(items);
+    return sortByDateDesc(galleries);
   }
 
-  return [...items].sort((a, b) => scoreGallery(b) - scoreGallery(a));
+  return [...galleries].sort((a, b) => scoreGallery(b) - scoreGallery(a));
 }
 
 export function getSortedCategorySummaries(mode = "popular") {
@@ -982,19 +1032,19 @@ export function getGalleryById(photoId) {
 }
 
 export function getHeroGalleries(limit = 4) {
-  return getTrendingPhotos(limit);
+  return getSortedGalleryFeed("popular").slice(0, limit);
 }
 
 export function getPopularGalleries(limit = 12) {
-  return getTrendingPhotos(limit);
+  return getSortedGalleryFeed("popular").slice(0, limit);
 }
 
 export function getNewestGalleries(limit = 12) {
-  return getLatestPhotos(limit);
+  return getSortedGalleryFeed("recent").slice(0, limit);
 }
 
 export function getTrendingGalleries(limit = 12) {
-  return getTrendingPhotos(limit);
+  return getSortedGalleryFeed("popular").slice(0, limit);
 }
 
 export function getTopCategoryTiles(limit = 9) {
@@ -1097,7 +1147,7 @@ export function searchCatalog(query) {
 
   const includes = (value) => value.toLowerCase().includes(normalized);
 
-  const galleries = searchPhotos(query).sort((a, b) => scoreGallery(b) - scoreGallery(a));
+  const galleries = getSortedGalleryFeed("popular", searchPhotos(query));
   const tags = getTags()
     .filter((tag) => includes(tag.name))
     .sort((a, b) => b.galleryCount - a.galleryCount)
