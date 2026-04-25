@@ -7,6 +7,11 @@ export function isVideo(url = "") {
   return VIDEO_EXTENSIONS.test(url.split("?")[0]) || VIDEO_HOSTS.some((host) => url.includes(host));
 }
 
+export function isCustomThumbnail(url = "") {
+  // Check if URL is a custom thumbnail (data URL or local blob)
+  return url && (url.startsWith("data:") || url.startsWith("blob:"));
+}
+
 export function shouldBypassProxy(url = "") {
   if (!url) return false;
   // Bypass proxy for domains that serve images directly without CDN issues
@@ -17,7 +22,20 @@ export function optimizeImageUrl(url, width = 900, quality = 82) {
   if (!url || isVideo(url) || url.includes("blob:") || url.startsWith("data:")) return url;
   if (url.includes("images.weserv.nl")) return url;
   
-  // For domains that work better without CDN proxy, serve them directly
+  // For custom thumbnails, return as-is
+  if (isCustomThumbnail(url)) return url;
+  
+  // For imx.to and similar direct-serve hosts, serve them directly with moderate optimization
+  if (shouldBypassProxy(url)) return url;
+  
+  return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=${width}&q=${quality}&output=webp`;
+}
+
+export function getOptimizedThumbnailUrl(url, width = 480, quality = 72) {
+  // Special optimization for thumbnails - lower quality and width for faster loading
+  if (!url || isVideo(url)) return url;
+  if (url.includes("images.weserv.nl")) return url;
+  if (isCustomThumbnail(url)) return url;
   if (shouldBypassProxy(url)) return url;
   
   return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=${width}&q=${quality}&output=webp`;

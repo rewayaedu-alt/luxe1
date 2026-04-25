@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { getPhotos } from "../lib/content";
 import { galleryApi } from "../services/galleryApi";
 import { getGalleryPrimaryImage, shuffleList } from "../lib/galleryUtils";
-import { optimizeImageUrl } from "../lib/imageUtils";
+import { optimizeImageUrl, getOptimizedThumbnailUrl } from "../lib/imageUtils";
 
 const PAGE_SIZE = 24;
 
@@ -67,7 +67,7 @@ function GalleryTile({ gallery }) {
           }
         >
           <img
-            src={optimizeImageUrl(previewImage.thumbnailUrl || previewImage.url, 1000)}
+            src={getOptimizedThumbnailUrl(previewImage.thumbnailUrl || previewImage.url, 600, 70)}
             alt={previewImage.alt || gallery.title || "Gallery image"}
             loading="lazy"
             decoding="async"

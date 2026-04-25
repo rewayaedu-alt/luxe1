@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { optimizeImageUrl } from "../lib/imageUtils";
+import { optimizeImageUrl, getOptimizedThumbnailUrl } from "../lib/imageUtils";
 
 const aspectCycle = [
   "aspect-[4/5]",
@@ -46,7 +46,7 @@ export default function MediaMasonry({
             <div className="overflow-hidden rounded-xl border border-white/8 bg-[#111318] shadow-[0_18px_40px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-white/18">
               <div className={`overflow-hidden ${aspectClass}`}>
                 <img
-                  src={optimizeImageUrl(imageSrc, imageWidth)}
+                  src={getOptimizedThumbnailUrl(imageSrc, 600, 70)}
                   alt={getAlt(item)}
                   loading="lazy"
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"

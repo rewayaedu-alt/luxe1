@@ -65,6 +65,8 @@ export default function Upload() {
   const [bulkUrls, setBulkUrls] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [customThumbnailFile, setCustomThumbnailFile] = useState(null);
+  const [customThumbnailUrl, setCustomThumbnailUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [entityForms, setEntityForms] = useState(defaultEntityForms);
   const [recentCreated, setRecentCreated] = useState([]);
@@ -101,6 +103,8 @@ export default function Upload() {
     setForm(defaultForm);
     setSelectedFile(null);
     setPreviewUrl("");
+    setCustomThumbnailFile(null);
+    setCustomThumbnailUrl("");
   };
 
   const handleCreateEntity = (entity) => {
@@ -156,9 +160,17 @@ export default function Upload() {
     setPreviewUrl(await fileToDataUrl(file));
   };
 
+  const handleCustomThumbnailChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setCustomThumbnailFile(file);
+    setCustomThumbnailUrl(await fileToDataUrl(file));
+  };
+
   const handleSingleCreate = async () => {
     setSaving(true);
     const sourceUrl = selectedFile ? previewUrl : hydratedForm.url.trim();
+    const customThumb = customThumbnailUrl || buildThumbnail(sourceUrl);
     const photo = createPhotoEntry({
       title: hydratedForm.title || "Untitled set",
       photographer: hydratedForm.photographer || "Guest creator",
@@ -169,7 +181,7 @@ export default function Upload() {
       tags: toTagArray(hydratedForm.tags),
       description: hydratedForm.description,
       url: sourceUrl,
-      thumbnailUrl: buildThumbnail(sourceUrl),
+      thumbnailUrl: customThumb,
       sourceType: selectedFile ? "upload" : "embed",
     });
     setRecentCreated([photo]);
@@ -192,7 +204,7 @@ export default function Upload() {
         tags: toTagArray(hydratedForm.tags),
         description: hydratedForm.description,
         url,
-        thumbnailUrl: buildThumbnail(url),
+        thumbnailUrl: customThumbnailUrl || buildThumbnail(url),
         sourceType: "embed",
       }))
     );
@@ -371,6 +383,27 @@ export default function Upload() {
             </div>
           )}
 
+          <div className="mt-4 rounded-[1.5rem] border border-dashed border-border bg-background/60 p-4">
+            <div className="flex items-start gap-3">
+              <Info className="mt-0.5 h-5 w-5 text-primary" />
+              <p className="text-sm leading-7 text-muted-foreground">
+                Custom thumbnail: Upload a separate image to use as the thumbnail across all gallery views. If not provided, the main image will be optimized as a thumbnail.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <Label className="mb-2 block">Custom thumbnail (optional)</Label>
+            <div className="relative">
+              <Input type="file" accept="image/*" onChange={handleCustomThumbnailChange} placeholder="Upload custom thumbnail" />
+            </div>
+            {customThumbnailUrl && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-500/10 px-3 py-2 text-xs text-green-700">
+                <span>✓ Custom thumbnail ready</span>
+              </div>
+            )}
+          </div>
+
           <div className="mt-8 flex flex-wrap gap-3">
             <Button onClick={mode === "single" ? handleSingleCreate : handleBulkCreate} disabled={saving || (mode === "single" ? !(previewUrl || hydratedForm.url) : !parsedBulkUrls.length)}>
               <UploadIcon className="mr-2 h-4 w-4" />
@@ -384,10 +417,20 @@ export default function Upload() {
           <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-card/85 shadow-[0_22px_60px_rgba(18,20,34,0.08)]">
             <img src={optimizeImageUrl(activePreview, 1200)} alt="Preview" className="h-[26rem] w-full object-cover" />
             <div className="p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Thumbnail-ready preview</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Full image preview</p>
               <h2 className="mt-2 text-2xl font-semibold">{hydratedForm.title || "Image-first preview"}</h2>
             </div>
           </div>
+
+          {customThumbnailUrl && (
+            <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-card/85 shadow-[0_22px_60px_rgba(18,20,34,0.08)]">
+              <img src={customThumbnailUrl} alt="Custom Thumbnail" className="h-[12rem] w-full object-cover" />
+              <div className="p-5">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Custom thumbnail preview</p>
+                <p className="mt-1 text-sm text-green-600">✓ This will show in all gallery views</p>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2">
             {entitySections.map((section) => {
