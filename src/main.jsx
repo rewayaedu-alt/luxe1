@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
+import { AuthProvider } from '@/lib/AuthContext'
 import '@/index.css'
 
 if (window.location.hostname === '127.0.0.1') {
@@ -10,5 +11,7 @@ if (window.location.hostname === '127.0.0.1') {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <App />
+  <AuthProvider>
+    <App />
+  </AuthProvider>
 )

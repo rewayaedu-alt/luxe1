@@ -1,34 +1,3 @@
-import { useEffect, useState } from 'react';
-import { galleryApi } from '@/services/galleryApi';
-
-export default function AdminPanel() {
-  const [galleries, setGalleries] = useState([]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await galleryApi.getGalleries(1, 50);
-        setGalleries(res.data || []);
-      } catch (err) {
-        console.error(err);
-      }
-    })();
-  }, []);
-
-  return (
-    <div className="mx-auto max-w-6xl p-6">
-      <h1 className="text-3xl font-semibold mb-4">Admin Panel</h1>
-      <section className="mb-6">
-        <h2 className="text-xl font-medium mb-2">Galleries</h2>
-        <div className="grid gap-3">
-          {galleries.map((g) => (
-            <div key={g.id} className="rounded border p-3">{g.title} — {g.photographer}</div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
 import { useState } from 'react';
 import {
   Card,

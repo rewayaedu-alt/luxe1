@@ -20,7 +20,6 @@ import UploadedPhotoDetail from "./pages/UploadedPhotoDetail";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminPanel from "./pages/AdminPanel";
 import AdminLogin from "./pages/AdminLogin";
-import { Navigate } from 'react-router-dom';
 
 export default function App() {
   return (
