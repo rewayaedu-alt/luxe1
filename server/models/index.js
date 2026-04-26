@@ -1,4 +1,5 @@
 import pool from '../db/connection.js';
+import bcrypt from 'bcrypt';
 
 export class Gallery {
   static async findAll(page = 1, limit = 24, sort = 'latest') {
@@ -147,6 +148,159 @@ export class Gallery {
   static async incrementLikes(id) {
     await pool.query('UPDATE galleries SET like_count = like_count + 1 WHERE id = $1', [id]);
   }
+
+  static async update(id, data) {
+    const { title, description, categoryId, photographer, isFeatured } = data;
+    const result = await pool.query(
+      'UPDATE galleries SET title = $1, description = $2, category_id = $3, photographer = $4, is_featured = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING *',
+      [title, description, categoryId, photographer, isFeatured || false, id]
+    );
+    return result.rows[0];
+  }
+
+  static async delete(id) {
+    // Gallery_tags will be deleted due to CASCADE
+    await pool.query('DELETE FROM galleries WHERE id = $1', [id]);
+  }
+}
+
+export class Category {
+  static async findAll() {
+    const result = await pool.query('SELECT * FROM categories ORDER BY name ASC');
+    return result.rows;
+  }
+
+  static async findById(id) {
+    const result = await pool.query('SELECT * FROM categories WHERE id = $1', [id]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  static async findBySlug(slug) {
+    const result = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  static async create(data) {
+    const { name, slug, description, icon } = data;
+    const result = await pool.query(
+      'INSERT INTO categories (name, slug, description, icon) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, slug, description, icon]
+    );
+    return result.rows[0];
+  }
+
+  static async update(id, data) {
+    const { name, description, icon } = data;
+    const result = await pool.query(
+      'UPDATE categories SET name = $1, description = $2, icon = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
+      [name, description, icon, id]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  static async delete(id) {
+    await pool.query('DELETE FROM categories WHERE id = $1', [id]);
+  }
+}
+
+export class Tag {
+  static async findAll() {
+    const result = await pool.query('SELECT * FROM tags ORDER BY name ASC');
+    return result.rows;
+  }
+
+  static async findById(id) {
+    const result = await pool.query('SELECT * FROM tags WHERE id = $1', [id]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  static async findBySlug(slug) {
+    const result = await pool.query('SELECT * FROM tags WHERE slug = $1', [slug]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  static async findByName(name) {
+    const result = await pool.query('SELECT * FROM tags WHERE name = $1', [name]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  static async create(data) {
+    const { name, slug, description } = data;
+    const result = await pool.query(
+      'INSERT INTO tags (name, slug, description) VALUES ($1, $2, $3) RETURNING *',
+      [name, slug || name.toLowerCase().replace(/\s+/g, '-'), description]
+    );
+    return result.rows[0];
+  }
+
+  static async addToGallery(galleryId, tagId) {
+    await pool.query(
+      'INSERT INTO gallery_tags (gallery_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [galleryId, tagId]
+    );
+  }
+
+  static async removeFromGallery(galleryId, tagId) {
+    await pool.query(
+      'DELETE FROM gallery_tags WHERE gallery_id = $1 AND tag_id = $2',
+      [galleryId, tagId]
+    );
+  }
+
+  static async findFindGalleriesByTag(slug, page = 1, limit = 24) {
+    const offset = (page - 1) * limit;
+    const result = await pool.query(
+      `SELECT 
+        g.id, g.title, g.slug, g.description, g.photographer, 
+        g.view_count, g.like_count, g.created_at,
+        (SELECT json_agg(json_build_object('id', i.id, 'url', i.url, 'thumbnail_url', i.thumbnail_url))
+         FROM images i WHERE i.gallery_id = g.id ORDER BY i."order" LIMIT 1) as images
+      FROM galleries g
+      INNER JOIN gallery_tags gt ON g.id = gt.gallery_id
+      INNER JOIN tags t ON gt.tag_id = t.id
+      WHERE t.slug = $1
+      ORDER BY g.created_at DESC
+      LIMIT $2 OFFSET $3`,
+      [slug, limit, offset]
+    );
+
+    const countResult = await pool.query(
+      'SELECT COUNT(DISTINCT g.id) as count FROM galleries g INNER JOIN gallery_tags gt ON g.id = gt.gallery_id INNER JOIN tags t ON gt.tag_id = t.id WHERE t.slug = $1',
+      [slug]
+    );
+
+    return {
+      galleries: result.rows,
+      total: parseInt(countResult.rows[0].count),
+      page,
+      limit
+    };
+  }
+
+  static async delete(id) {
+    // gallery_tags will be deleted due to CASCADE
+    await pool.query('DELETE FROM tags WHERE id = $1', [id]);
+  }
+}
+
+export class Image {
+  static async findById(id) {
+    const result = await pool.query('SELECT * FROM images WHERE id = $1', [id]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  static async create(data) {
+    const { galleryId, url, thumbnailUrl, altText, order, width, height } = data;
+    const result = await pool.query(
+      'INSERT INTO images (gallery_id, url, thumbnail_url, alt_text, "order", width, height) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [galleryId, url, thumbnailUrl || url, altText, order || 0, width, height]
+    );
+    return result.rows[0];
+  }
+
+  static async delete(id) {
+    await pool.query('DELETE FROM images WHERE id = $1', [id]);
+  }
 }
 
 export class Tag {
@@ -258,5 +412,87 @@ export class Image {
       [galleryId]
     );
     return result.rows;
+  }
+}
+
+export class User {
+  static async findById(id) {
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    return result.rows.length > 0 ? new User(result.rows[0]) : null;
+  }
+
+  static async findByUsername(username) {
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    return result.rows.length > 0 ? new User(result.rows[0]) : null;
+  }
+
+  static async findByEmail(email) {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    return result.rows.length > 0 ? new User(result.rows[0]) : null;
+  }
+
+  static async findAll() {
+    const result = await pool.query('SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC');
+    return result.rows.map(row => new User(row));
+  }
+
+  static async create(data) {
+    const { username, email, password, role } = data;
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    const result = await pool.query(
+      'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role, created_at',
+      [username, email, passwordHash, role || 'viewer']
+    );
+    return new User(result.rows[0]);
+  }
+
+  static async update(id, data) {
+    const { username, email, role, password } = data;
+    let query = 'UPDATE users SET ';
+    let params = [];
+    let paramIndex = 1;
+    
+    if (username !== undefined) {
+      query += `username = $${paramIndex++}, `;
+      params.push(username);
+    }
+    if (email !== undefined) {
+      query += `email = $${paramIndex++}, `;
+      params.push(email);
+    }
+    if (role !== undefined) {
+      query += `role = $${paramIndex++}, `;
+      params.push(role);
+    }
+    if (password !== undefined) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      query += `password_hash = $${paramIndex++}, `;
+      params.push(passwordHash);
+    }
+    
+    query += `updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex} RETURNING id, username, email, role`;
+    params.push(id);
+    
+    const result = await pool.query(query, params);
+    return result.rows.length > 0 ? new User(result.rows[0]) : null;
+  }
+
+  static async delete(id) {
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+  }
+
+  constructor(data) {
+    this.id = data.id;
+    this.username = data.username;
+    this.email = data.email;
+    this.passwordHash = data.password_hash;
+    this.role = data.role || 'viewer';
+    this.createdAt = data.created_at;
+    this.updatedAt = data.updated_at;
+  }
+
+  async comparePassword(password) {
+    return bcrypt.compare(password, this.passwordHash);
   }
 }
