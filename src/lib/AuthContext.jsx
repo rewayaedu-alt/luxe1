@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { galleryApi } from '../services/galleryApi';
 
 const AuthContext = createContext();
 
@@ -7,13 +8,32 @@ export const AuthProvider = ({ children }) => {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState(null);
+  const [user, setUser] = useState(null);
 
-  const checkUserAuth = useCallback(() => {
+  const checkUserAuth = useCallback(async () => {
     try {
       setIsLoadingAuth(true);
       const token = localStorage.getItem('adminToken');
-      setIsAuthenticated(!!token);
-      setAuthError(null);
+      
+      if (token) {
+        try {
+          const data = await galleryApi.verifyAuth();
+          if (data.user) {
+            setUser(data.user);
+            setIsAuthenticated(true);
+            setAuthError(null);
+          } else {
+            throw new Error('Invalid token');
+          }
+        } catch (err) {
+          localStorage.removeItem('adminToken');
+          setIsAuthenticated(false);
+          setUser(null);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+      }
     } catch (err) {
       setAuthError({ type: 'auth_check_failed', message: err.message });
     } finally {
@@ -26,26 +46,40 @@ export const AuthProvider = ({ children }) => {
     checkUserAuth();
   }, [checkUserAuth]);
 
-  const login = useCallback((credentials) => {
-    // Simple authentication - in production, this should call a backend API
-    const { password } = credentials;
-    const ADMIN_PASSWORD = 'admin123'; // TODO: Use proper backend authentication
+  const login = useCallback(async (credentials) => {
+    try {
+      setIsLoadingAuth(true);
+      const { username, password } = credentials;
 
-    if (password === ADMIN_PASSWORD) {
-      localStorage.setItem('adminToken', 'admin-token-' + Date.now());
-      setIsAuthenticated(true);
-      setAuthError(null);
-      return true;
-    } else {
-      setAuthError({ type: 'invalid_credentials', message: 'Invalid password' });
+      const data = await galleryApi.login(username, password);
+      
+      if (data.token && data.user) {
+        localStorage.setItem('adminToken', data.token);
+        setUser(data.user);
+        setIsAuthenticated(true);
+        setAuthError(null);
+        return true;
+      }
       return false;
+    } catch (err) {
+      setAuthError({ type: 'login_failed', message: err.message });
+      return false;
+    } finally {
+      setIsLoadingAuth(false);
     }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('adminToken');
-    setIsAuthenticated(false);
-    setAuthError(null);
+  const logout = useCallback(async () => {
+    try {
+      await galleryApi.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      localStorage.removeItem('adminToken');
+      setIsAuthenticated(false);
+      setUser(null);
+      setAuthError(null);
+    }
   }, []);
 
   return (
@@ -54,6 +88,7 @@ export const AuthProvider = ({ children }) => {
       isLoadingAuth,
       authChecked,
       authError,
+      user,
       checkUserAuth,
       login,
       logout

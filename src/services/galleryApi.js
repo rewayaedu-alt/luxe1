@@ -1,4 +1,24 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
+    : `${window.location.origin}/api`
+);
+
+function getAuthToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('adminToken') || localStorage.getItem('app_access_token');
+}
+
+function getAuthHeaders() {
+  const token = getAuthToken();
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 export const galleryApi = {
   // Galleries
@@ -11,13 +31,9 @@ export const galleryApi = {
   },
 
   async createGallery(payload) {
-    const token = localStorage.getItem('app_access_token');
-    const res = await fetch(`${API_BASE_URL}/admin/galleries`, {
+    const res = await fetch(`${API_BASE_URL}/galleries`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     });
     if (!res.ok) {
@@ -102,5 +118,36 @@ export const galleryApi = {
     const response = await fetch(url);
     if (!response.ok) throw new Error('Search failed');
     return response.json();
+  },
+
+  // Auth
+  async login(username, password) {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Login failed');
+    }
+    return response.json();
+  },
+
+  async verifyAuth() {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Not authenticated');
+    return response.json();
+  },
+
+  async logout() {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('app_access_token');
+    return { success: true };
+  }
+
   }
 };
